@@ -1,0 +1,22 @@
+[tool.poetry]
+name = "loxone"
+version = "1.0.0"
+description = "extract statistics from Loxone Miniserver"
+authors = ["Alexander Dreweke <thrawn@shadowhunt.de>"]
+license = "GPL-3.0-or-later"
+readme = "README.md"
+
+[tool.poetry.dependencies]
+argparse = "^1.4.0"
+psycopg = "^3.1.1"
+python = "^3.9"
+tzlocal = "^4.2"
+pyftpdlib = "^1.5.7"
+
+[tool.poetry.dev-dependencies]
+flake9 = "^3.8.3"
+pyupgrade = "^2.37.3"
+
+[build-system]
+requires = ["poetry-core>=1.0.0"]
+build-backend = "poetry.core.masonry.api"
