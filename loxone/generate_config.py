@@ -19,7 +19,7 @@ def main() -> None:
     rooms = dict()
     for node in root.findall('.//C[@Type="PlaceCaption"]/C[@Type="Place"]'):
         attributes = node.attrib
-        rooms[attributes['U']] = {'name': attributes['Title'], 'temperature': [], 'humidity': [], 'shading': [], 'valve': [], 'ventilation': []}
+        rooms[attributes['U']] = {'id': attributes['U'], 'name': attributes['Title'], 'temperature': [], 'humidity': [], 'shading': [], 'valve': [], 'ventilation': []}
 
     for node in root.findall('.//*[@StatsType]'):
         room = None
@@ -46,13 +46,12 @@ def main() -> None:
                 continue
 
     config = configparser.ConfigParser()
-    for room_id in rooms:
-        room = rooms[room_id]
+    for room in sorted(rooms.values(), key=lambda item: item['name']):
         if len(room['temperature']) + len(room['humidity']) + len(room['shading']) + len(room['valve']) + len(room['ventilation']) <= 0:
             # skip rooms without sensors or actors
             continue
 
-        config[room_id] = {
+        config[room['id']] = {
             'name': room['name'],
             'temperature': '|'.join(room['temperature']),
             'humidity': '|'.join(room['humidity']),
