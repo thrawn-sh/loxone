@@ -16,6 +16,11 @@ $> poetry run flake8
 $> poetry build
 ```
 
+### Extract mapping part for config into ini file
+```sh
+$> ./bin/generate_config --configuration=<LOXONE_CONFIGURATION>
+```
+
 ### Export the available statistics from Loxone to PostgreSQL
 ```sh
 # create database and user
