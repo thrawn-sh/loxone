@@ -75,7 +75,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(description='export data from Loxone to PostgreSQL', formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument('--server', default='http://miniserver', type=str, help='Loxone miniserver url')
     parser.add_argument('--user', default='loxone', type=str, help='Username to authenticate with')
-    parser.add_argument('--password', default='loxone', type=str, help='Password to authenticate with')
+    parser.add_argument('--password', default='enoxol2009', type=str, help='Password to authenticate with')
     parser.add_argument('--after', default='2009-01', type=str, help='only import data that was created after (YYYY-MM)')
     parser.add_argument('--before', default=now.strftime('%Y-%m'), type=str, help='only import data that was created before (YYYY-MM)')
     parser.add_argument('--database', default='postgresql', help='database config to use')
