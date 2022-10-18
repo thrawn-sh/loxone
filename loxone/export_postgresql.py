@@ -106,6 +106,7 @@ def main() -> None:
                     if response.status_code == 404:
                         time.sleep(1)
                         continue
+                    response.raise_for_status()
 
                     root = xml.etree.ElementTree.fromstring(response.content)
                     for node in root.findall('.//S'):
