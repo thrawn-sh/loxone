@@ -18,7 +18,8 @@ $> poetry build
 
 ### Extract mapping part for config into ini file
 ```sh
-$> ./bin/generate_config --configuration=<LOXONE_CONFIGURATION>
+$> ./bin/download_miniserver --server="<MINISERVER>" --user="<LOXONE_USER>" --password="<LOXONE_PASSWORD>" --output="<LOXONE_CONFIGURATION>"
+$> ./bin/generate_config --configuration="<LOXONE_CONFIGURATION>"
 ```
 
 ### Export the available statistics from Loxone to PostgreSQL
