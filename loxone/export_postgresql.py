@@ -42,7 +42,7 @@ def consolidate(values: dict) -> None:
 
 def propagate(values: dict) -> None:
     sorted_keys = sorted(values)
-    last = values[sorted_keys[0]] # TODO get from DB
+    last = values[sorted_keys[0]]  # TODO get from DB
     for key in sorted_keys:
         current = values[key]
         for section in SECTIONS:
@@ -69,6 +69,7 @@ def generate_sql(sections: list) -> str:
         values.append('%s')
 
     return f'INSERT INTO room ({", ".join(columns)}) VALUES({", ".join(values)}) ON CONFLICT (time, id) DO NOTHING;'
+
 
 def main() -> None:
     now = datetime.date.today()
@@ -135,8 +136,8 @@ def main() -> None:
         cursor.close()
         database.commit()
     finally:
-       if database is not None:
-           database.close()
+        if database is not None:
+            database.close()
 
 
 if __name__ == '__main__':
