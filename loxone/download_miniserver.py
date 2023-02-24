@@ -43,7 +43,7 @@ def download_latest_config(server: str, user: str, password: str) -> io.BytesIO:
 def uncompress(download_file: io.BytesIO) -> bytearray:
     with zipfile.ZipFile(download_file) as zip_file:
         with zip_file.open('sps0.LoxCC') as file:
-            header = struct.unpack('<L', file.read(4))
+            header = struct.unpack('<L', file.read(4))[0]
             if header != 0xaabbccee:  # magic word to detect a compressed file
                 print('wrong header')
                 return None
@@ -58,7 +58,7 @@ def uncompress(download_file: io.BytesIO) -> bytearray:
                 # the remainder of bytes to copy. (Comment: it might be possible that
                 # it follows the same scheme as below, which means: if more than
                 # 255+15 bytes need to be copied, another 0xff byte follows and so on)
-                byte = struct.unpack('<B', data[index:index + 1])
+                byte = struct.unpack('<B', data[index:index + 1])[0]
                 index += 1
                 copyBytes = byte >> 4
                 byte &= 0xf
@@ -76,7 +76,7 @@ def uncompress(download_file: io.BytesIO) -> bytearray:
                     break
                 # Reference to data which already was copied into the result.
                 # bytesBack is the offset from the end of the string
-                bytesBack = struct.unpack('<H', data[index:index + 2])
+                bytesBack = struct.unpack('<H', data[index:index + 2])[0]
                 index += 2
                 # the number of bytes to be transferred is at least 4 plus the lower
                 # nibble of the package header.
@@ -84,7 +84,7 @@ def uncompress(download_file: io.BytesIO) -> bytearray:
                 if byte == 15:
                     # if the header was 15, then more than 19 bytes need to be copied.
                     while True:
-                        val = struct.unpack('<B', data[index:index + 1])
+                        val = struct.unpack('<B', data[index:index + 1])[0]
                         bytesBackCopied += val
                         index += 1
                         if val != 0xff:
