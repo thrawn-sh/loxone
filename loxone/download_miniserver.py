@@ -5,6 +5,7 @@ import argparse
 import ftplib
 import io
 import struct
+import sys
 import zipfile
 import zlib
 
@@ -45,7 +46,7 @@ def uncompress(download_file: io.BytesIO) -> bytearray:
         with zip_file.open('sps0.LoxCC') as file:
             header = struct.unpack('<L', file.read(4))[0]
             if header != 0xaabbccee:  # magic word to detect a compressed file
-                print('wrong header')
+                print('wrong header', file=sys.stderr)
                 return None
 
             compressedSize, uncompressedSize, checksum = struct.unpack('<LLL', file.read(12))
@@ -98,11 +99,11 @@ def uncompress(download_file: io.BytesIO) -> bytearray:
                         result += result[-bytesBack:-bytesBack + 1]
                     bytesBackCopied -= 1
             if checksum != zlib.crc32(result):
-                print('Invalid checksum')
+                print('Invalid checksum', file=sys.stderr)
                 return None
 
             if len(result) != uncompressedSize:
-                print(f'Uncompressed filesize is wrong {len(result)} != {uncompressedSize}')
+                print(f'Uncompressed filesize is wrong {len(result)} != {uncompressedSize}', file=sys.stderr)
                 return None
 
             return result
@@ -113,12 +114,16 @@ def main() -> None:
     parser.add_argument('--server', default='http://miniserver', type=str, help='Loxone miniserver url')
     parser.add_argument('--user', default='loxone', type=str, help='Username to authenticate with')
     parser.add_argument('--password', default='enoxol2009', type=str, help='Password to authenticate with')
-    parser.add_argument('--output', default='Project.Loxone', type=str, help='Output file to save configuration to')
+    parser.add_argument('--output', default='Project.Loxone', type=str, help='Output file to save configuration to ("-" for stdout)')
 
     arguments = parser.parse_args()
     raw = download_latest_config(arguments.server, arguments.user, arguments.password)
     uncompressed = uncompress(raw)
     if uncompressed:
+        if arguments.output == '-':
+            sys.stdout.buffer.write(uncompressed)
+            return
+
         with open(arguments.output, 'wb') as output:
             output.write(uncompressed)
 
