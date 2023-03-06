@@ -19,17 +19,23 @@ def main() -> None:
     rooms = dict()
     for node in root.findall('.//C[@Type="PlaceCaption"]/C[@Type="Place"]'):
         attributes = node.attrib
-        rooms[attributes['U']] = {'id': attributes['U'], 'name': attributes['Title'], 'temperature': [], 'humidity': [], 'shading': [], 'valve': [], 'ventilation': []}
+        rooms[attributes['U']] = {'id': attributes['U'], 'name': attributes['Title'], 'temperature': [], 'temperature_target': [], 'humidity': [], 'light': [], 'shading': [], 'valve': [], 'ventilation': []}
 
-    for node in root.findall('.//*[@StatsType]'):
+    for node in root.findall('.//C'):
         room = None
-        for ioData in node.findall('./IoData'):
+        for ioData in node.findall('./IoData/[@Pr]'):
             room = rooms[ioData.attrib['Pr']]
 
         attributes = node.attrib
         id = attributes['U']
         if attributes['Type'] == 'HeatIRoomController2':
             room['temperature'].append(id)
+            for target in node.findall('./Co/[@K="AQt"]'):
+                room['temperature_target'].append(target.attrib['U'])
+            continue
+
+        if attributes['Type'] == 'LightController2':
+            room['light'].append(id)
             continue
 
         if attributes['Type'] == 'LoxAIRAactor':
@@ -47,14 +53,16 @@ def main() -> None:
 
     config = configparser.ConfigParser()
     for room in sorted(rooms.values(), key=lambda item: item['name']):
-        if len(room['temperature']) + len(room['humidity']) + len(room['shading']) + len(room['valve']) + len(room['ventilation']) <= 0:
+        if len(room['temperature']) + len(room['temperature_target']) + len(room['humidity']) + len(room['light']) + len(room['shading']) + len(room['valve']) + len(room['ventilation']) <= 0:
             # skip rooms without sensors or actors
             continue
 
         config[room['id']] = {
             'name': room['name'],
             'temperature': '|'.join(room['temperature']),
+            'temperature_target': '|'.join(room['temperature_target']),
             'humidity': '|'.join(room['humidity']),
+            'light': '|'.join(room['light']),
             'shading': '|'.join(room['shading']),
             'valve': '|'.join(room['valve']),
             'ventilation': '|'.join(room['ventilation']),
