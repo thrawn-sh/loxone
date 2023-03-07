@@ -29,9 +29,10 @@ def main() -> None:
         attributes = node.attrib
         id = attributes['U']
         if attributes['Type'] == 'HeatIRoomController2':
-            room['temperature'].append(id)
             for target in node.findall('./Co/[@K="AQt"]'):
                 room['temperature_target'].append(target.attrib['U'])
+            for target in node.findall('./Co/[@K="Temp"]'):
+                room['temperature'].append(target.attrib['U'])
             continue
 
         if attributes['Type'] == 'LightController2':
