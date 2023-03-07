@@ -36,7 +36,11 @@ def main() -> None:
             continue
 
         if attributes['Type'] == 'LightController2':
-            room['light'].append(id)
+            for target in node.findall('./Co'):
+                if target.attrib['K'].startswith('AQ'):
+                    uuid = target.attrib['U']
+                    if root.findall(f'.//C[@Type="OutputRef"]/Co/In[@Input="{uuid}"]'):
+                        room['light'].append(uuid)
             continue
 
         if attributes['Type'] == 'LoxAIRAactor':
