@@ -1,3 +1,4 @@
 *.Loxone
 *.ini
 *.loxone
+loxone-cache.sql
