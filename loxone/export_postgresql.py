@@ -265,7 +265,6 @@ def main() -> None:
             file.write(statement)
             file.write('\n')
 
-    return
     db_config = configparser.ConfigParser()
     db_config.read(arguments.db_settings)
     with get_database_connection(db_config, arguments.database) as database:
