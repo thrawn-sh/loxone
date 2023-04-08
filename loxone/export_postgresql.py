@@ -136,11 +136,17 @@ async def websocket_connect(secure: str, server: str, user: str, password: str, 
         # get current values
         await websocket_send(websocket, 'jdev/sps/enablebinstatusupdate')
 
-        response = await websocket.recv()
-        # print(f'header: {response}')
-        response = await websocket.recv()
-        # print(f'???: {response}')
-        return parseTable(response)
+        while True:
+            response = await websocket.recv()
+            bin_type, identifier, info, reserved, size = struct.unpack_from('<BBBBI', response)
+            assert bin_type == 0x3, 'must be binary type (0x3)'
+            assert info == 0x0, 'must be empty'
+            assert reserved == 0x0, 'must be empty'
+
+            response = await websocket.recv()
+            #print(f'???: {response}')
+            if identifier == 0x2:
+                return parseTable(response)
 
 
 def calculate_boolean(values: list) -> bool:
