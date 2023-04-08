@@ -187,7 +187,7 @@ def generate_statement(pairs: list) -> str:
         if value is None:
             values.append('NULL')
         else:
-            values.append(f'"{value}"')
+            values.append(f"'{value}'")
 
     return f'INSERT INTO room ({", ".join(keys)}) VALUES({", ".join(values)}) ON CONFLICT (time, id) DO NOTHING;'
 
