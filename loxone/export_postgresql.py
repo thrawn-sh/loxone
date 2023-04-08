@@ -219,6 +219,14 @@ def main() -> None:
     secure = determine_secure(info)
     # Step 3
     data = asyncio.run(websocket_connect(secure, arguments.server, arguments.user, arguments.password, public_key))
+    if False:
+        with open('loxone-dump.txt', 'w', encoding='utf-8') as file:
+            for key, value in data.items():
+                file.write(key)
+                file.write(' ')
+                file.write(str(value))
+                file.write('\n')
+
 
     # custom
     now = datetime.datetime.now()
