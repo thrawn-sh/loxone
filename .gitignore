@@ -2,3 +2,4 @@
 *.ini
 *.loxone
 loxone-cache.sql
+loxone-dump.txt
