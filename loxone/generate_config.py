@@ -51,6 +51,11 @@ def main() -> None:
             room['valve'].append(id)
             continue
 
+        if attributes['Type'] == 'LoxAIRAsensor':
+            if attributes['Title'] == 'Luftfeuchte':
+                room['humidity'].append(id)
+                continue
+
         if attributes['Type'] == 'TreeAsensor':
             if attributes['Title'] == 'Luftfeuchte':
                 room['humidity'].append(id)
