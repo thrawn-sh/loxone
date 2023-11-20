@@ -38,19 +38,18 @@ def download_latest_config(server: str, user: str, password: str) -> io.BytesIO:
     ftp.quit()
     buffer.seek(0)
 
-    result = bytearray(buffer.read())
     if filename.endswith('zip'):
-        return uncompress(result)
-    return result
+        return uncompress(buffer)
+    return buffer
 
 
-def uncompress(download: bytearray) -> bytearray:
+def uncompress(download: io.BytesIO) -> io.BytesIO:
     with zipfile.ZipFile(download) as zip_file:
         with zip_file.open('sps0.LoxCC') as file:
-            return bytearray(file.read())
+            return io.BytesIO(file.read())
 
 
-def decode(file: bytearray) -> bytearray:
+def decode(file: io.BytesIO) -> bytearray:
     header = struct.unpack('<L', file.read(4))[0]
     if header != 0xaabbccee:  # magic word to detect a compressed file
         print('wrong header', file=sys.stderr)
