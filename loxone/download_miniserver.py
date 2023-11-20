@@ -38,75 +38,82 @@ def download_latest_config(server: str, user: str, password: str) -> io.BytesIO:
     ftp.quit()
     buffer.seek(0)
 
-    return buffer
+    result = bytearray(buffer.read())
+    if filename.endswith('zip'):
+        return uncompress(result)
+    return result
 
 
-def uncompress(download_file: io.BytesIO) -> bytearray:
-    with zipfile.ZipFile(download_file) as zip_file:
+def uncompress(download: bytearray) -> bytearray:
+    with zipfile.ZipFile(download) as zip_file:
         with zip_file.open('sps0.LoxCC') as file:
-            header = struct.unpack('<L', file.read(4))[0]
-            if header != 0xaabbccee:  # magic word to detect a compressed file
-                print('wrong header', file=sys.stderr)
-                return None
+            return bytearray(file.read())
 
-            compressedSize, uncompressedSize, checksum = struct.unpack('<LLL', file.read(12))
-            data = file.read(compressedSize)
-            index = 0
-            result = bytearray()
-            while index < len(data):
-                # the first byte contains the number of bytes to copy in the upper
-                # nibble. If this nibble is 15, then another byte follows with
-                # the remainder of bytes to copy. (Comment: it might be possible that
-                # it follows the same scheme as below, which means: if more than
-                # 255+15 bytes need to be copied, another 0xff byte follows and so on)
-                byte = struct.unpack('<B', data[index:index + 1])[0]
+
+def decode(file: bytearray) -> bytearray:
+    header = struct.unpack('<L', file.read(4))[0]
+    if header != 0xaabbccee:  # magic word to detect a compressed file
+        print('wrong header', file=sys.stderr)
+        return None
+
+    compressedSize, uncompressedSize, checksum = struct.unpack('<LLL', file.read(12))
+    data = file.read(compressedSize)
+    index = 0
+    result = bytearray()
+    while index < len(data):
+        # the first byte contains the number of bytes to copy in the upper
+        # nibble. If this nibble is 15, then another byte follows with
+        # the remainder of bytes to copy. (Comment: it might be possible that
+        # it follows the same scheme as below, which means: if more than
+        # 255+15 bytes need to be copied, another 0xff byte follows and so on)
+        byte = struct.unpack('<B', data[index:index + 1])[0]
+        index += 1
+        copyBytes = byte >> 4
+        byte &= 0xf
+        if copyBytes == 15:
+            while True:
+                addByte = data[index]
+                copyBytes += addByte
                 index += 1
-                copyBytes = byte >> 4
-                byte &= 0xf
-                if copyBytes == 15:
-                    while True:
-                        addByte = data[index]
-                        copyBytes += addByte
-                        index += 1
-                        if addByte != 0xff:
-                            break
-                if copyBytes > 0:
-                    result += data[index:index + copyBytes]
-                    index += copyBytes
-                if index >= len(data):
+                if addByte != 0xff:
                     break
-                # Reference to data which already was copied into the result.
-                # bytesBack is the offset from the end of the string
-                bytesBack = struct.unpack('<H', data[index:index + 2])[0]
-                index += 2
-                # the number of bytes to be transferred is at least 4 plus the lower
-                # nibble of the package header.
-                bytesBackCopied = 4 + byte
-                if byte == 15:
-                    # if the header was 15, then more than 19 bytes need to be copied.
-                    while True:
-                        val = struct.unpack('<B', data[index:index + 1])[0]
-                        bytesBackCopied += val
-                        index += 1
-                        if val != 0xff:
-                            break
-                # Duplicating the last byte in the buffer multiple times is possible,
-                # so we need to account for that.
-                while bytesBackCopied > 0:
-                    if -bytesBack + 1 == 0:
-                        result += result[-bytesBack:]
-                    else:
-                        result += result[-bytesBack:-bytesBack + 1]
-                    bytesBackCopied -= 1
-            if checksum != zlib.crc32(result):
-                print('Invalid checksum', file=sys.stderr)
-                return None
+        if copyBytes > 0:
+            result += data[index:index + copyBytes]
+            index += copyBytes
+        if index >= len(data):
+            break
+        # Reference to data which already was copied into the result.
+        # bytesBack is the offset from the end of the string
+        bytesBack = struct.unpack('<H', data[index:index + 2])[0]
+        index += 2
+        # the number of bytes to be transferred is at least 4 plus the lower
+        # nibble of the package header.
+        bytesBackCopied = 4 + byte
+        if byte == 15:
+            # if the header was 15, then more than 19 bytes need to be copied.
+            while True:
+                val = struct.unpack('<B', data[index:index + 1])[0]
+                bytesBackCopied += val
+                index += 1
+                if val != 0xff:
+                    break
+        # Duplicating the last byte in the buffer multiple times is possible,
+        # so we need to account for that.
+        while bytesBackCopied > 0:
+            if -bytesBack + 1 == 0:
+                result += result[-bytesBack:]
+            else:
+                result += result[-bytesBack:-bytesBack + 1]
+            bytesBackCopied -= 1
+    if checksum != zlib.crc32(result):
+        print('Invalid checksum', file=sys.stderr)
+        return None
 
-            if len(result) != uncompressedSize:
-                print(f'Uncompressed filesize is wrong {len(result)} != {uncompressedSize}', file=sys.stderr)
-                return None
+    if len(result) != uncompressedSize:
+        print(f'Uncompressed filesize is wrong {len(result)} != {uncompressedSize}', file=sys.stderr)
+        return None
 
-            return result
+    return result
 
 
 def main() -> None:
@@ -118,14 +125,14 @@ def main() -> None:
 
     arguments = parser.parse_args()
     raw = download_latest_config(arguments.server, arguments.user, arguments.password)
-    uncompressed = uncompress(raw)
-    if uncompressed:
+    xml = decode(raw)
+    if xml:
         if arguments.output == '-':
-            sys.stdout.buffer.write(uncompressed)
+            sys.stdout.buffer.write(xml)
             return
 
         with open(arguments.output, 'wb') as output:
-            output.write(uncompressed)
+            output.write(xml)
 
 
 if __name__ == '__main__':
