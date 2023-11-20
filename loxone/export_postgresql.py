@@ -144,7 +144,7 @@ async def websocket_connect(secure: str, server: str, user: str, password: str, 
             assert reserved == 0x0, 'must be empty'
 
             response = await websocket.recv()
-            #print(f'???: {response}')
+            # print(f'???: {response}')
             if identifier == 0x2:
                 return parseTable(response)
 
@@ -226,7 +226,6 @@ def main() -> None:
                 file.write(' ')
                 file.write(str(value))
                 file.write('\n')
-
 
     # custom
     now = datetime.datetime.now()
