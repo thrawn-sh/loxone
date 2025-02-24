@@ -17,6 +17,8 @@ logging.basicConfig(level=logging.WARNING,
 # Create a global logger
 LOGGER = logging.getLogger('loxone.monitor')
 
+AES_KEY_LENGTH = 32
+AES_IV_LENGTH = 16
 
 async def keepalive(websocket: websockets.WebSocketClientProtocol, sleep: int) -> None:
     try:
@@ -65,12 +67,12 @@ async def listen(server: str, user: str, password) -> None:
     websocket_url = f'{info.ws_base_url}/ws/rfc6455'
     LOGGER.debug(f'connecting to {websocket_url}')
     async with websockets.connect(websocket_url) as websocket:
-        # Step 4
-        aes_key = secrets.token_hex(32)
+         # Step 4
+        aes_key = secrets.token_hex(AES_KEY_LENGTH)
         LOGGER.debug(f'aes_key: {aes_key}')
 
         # Step 5
-        aes_iv = secrets.token_hex(16)
+        aes_iv = secrets.token_hex(AES_IV_LENGTH)
         LOGGER.debug(f'aes_iv: {aes_iv}')
 
         # Step 6
