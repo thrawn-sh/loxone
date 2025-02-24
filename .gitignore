@@ -1,5 +1,6 @@
 *.Loxone
 *.ini
 *.loxone
+__pycache__
 loxone-cache.sql
 loxone-dump.txt
