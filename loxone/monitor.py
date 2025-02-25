@@ -9,10 +9,6 @@ import websockets
 
 from loxone.loxone_server import LoxoneServer
 
-# Configure the logger
-logging.basicConfig(level=logging.WARNING,
-                    format='%(asctime)s - %(name)-12s - %(levelname)-8s - %(message)s',
-                    handlers=[logging.StreamHandler()])
 
 # Create a global logger
 LOGGER = logging.getLogger('loxone.monitor')
@@ -63,56 +59,56 @@ async def listen(server: str, user: str, password) -> None:
     # Step 2
     public_key = LoxoneServer.RestClient.get_public_key(server)
 
-    # Step 3
-    websocket_url = f'{info.ws_base_url}/ws/rfc6455'
-    LOGGER.debug(f'connecting to {websocket_url}')
-    async with websockets.connect(websocket_url) as websocket:
-         # Step 4
-        aes_key = secrets.token_hex(AES_KEY_LENGTH)
-        LOGGER.debug(f'aes_key: {aes_key}')
+    try:
+        # Step 3
+        websocket_url = f'{info.ws_base_url}/ws/rfc6455'
+        LOGGER.debug(f'connecting to {websocket_url}')
+        async with websockets.connect(websocket_url) as websocket:
+            # Step 4
+            aes_key = secrets.token_hex(AES_KEY_LENGTH)
+            LOGGER.debug(f'aes_key: {aes_key}')
 
-        # Step 5
-        aes_iv = secrets.token_hex(AES_IV_LENGTH)
-        LOGGER.debug(f'aes_iv: {aes_iv}')
+            # Step 5
+            aes_iv = secrets.token_hex(AES_IV_LENGTH)
+            LOGGER.debug(f'aes_iv: {aes_iv}')
 
-        # Step 6
-        session_key = LoxoneServer.AuthenticationUtil.create_session_key(aes_key, aes_iv, public_key)
-        LOGGER.debug(f'session_key: {session_key}')
+            # Step 6
+            session_key = LoxoneServer.AuthenticationUtil.create_session_key(aes_key, aes_iv, public_key)
+            LOGGER.debug(f'session_key: {session_key}')
 
-        # Step 7
-        await LoxoneServer.MessageBody.sendMessage(websocket, f'jdev/sys/keyexchange/{session_key}')
-        header = await LoxoneServer.MessageHeader.parse(websocket)
-        assert header.identifier == LoxoneServer.MessageHeader.Identifier.TEXT, 'expected text (json) message'
-        message = await LoxoneServer.MessageBody.parseJsonMessage(websocket)
+            # Step 7
+            await LoxoneServer.MessageBody.sendMessage(websocket, f'jdev/sys/keyexchange/{session_key}')
+            header = await LoxoneServer.MessageHeader.parse(websocket)
+            assert header.identifier == LoxoneServer.MessageHeader.Identifier.TEXT, 'expected text (json) message'
+            message = await LoxoneServer.MessageBody.parseJsonMessage(websocket)
 
-        # Step 8
-        salt = secrets.token_hex(2)
-        LOGGER.debug(f'salt: {salt}')
+            # Step 8
+            salt = secrets.token_hex(2)
+            LOGGER.debug(f'salt: {salt}')
 
-        # Step 9.b
-        await LoxoneServer.MessageBody.sendMessage(websocket, f'jdev/sys/getkey2/{user}')
-        header = await LoxoneServer.MessageHeader.parse(websocket)
-        assert header.identifier == LoxoneServer.MessageHeader.Identifier.TEXT, 'expected text (json) message'
-        message = await LoxoneServer.MessageBody.parseJsonMessage(websocket)
-        assert message['LL']['control'] == f'jdev/sys/getkey2/{user}', f'unexpected control: {message}'
-        assert message['LL']['code'] == '200', f'unexpected code: {message}'
-        user_hash = LoxoneServer.AuthenticationUtil.calculate_hash(user, password, message['LL']['value']['hashAlg'], message['LL']['value']['key'], message['LL']['value']['salt'])
+            # Step 9.b
+            await LoxoneServer.MessageBody.sendMessage(websocket, f'jdev/sys/getkey2/{user}')
+            header = await LoxoneServer.MessageHeader.parse(websocket)
+            assert header.identifier == LoxoneServer.MessageHeader.Identifier.TEXT, 'expected text (json) message'
+            message = await LoxoneServer.MessageBody.parseJsonMessage(websocket)
+            assert message['LL']['control'] == f'jdev/sys/getkey2/{user}', f'unexpected control: {message}'
+            assert message['LL']['code'] == '200', f'unexpected code: {message}'
+            user_hash = LoxoneServer.AuthenticationUtil.calculate_hash(user, password, message['LL']['value']['hashAlg'], message['LL']['value']['key'], message['LL']['value']['salt'])
 
-        # TODO maybe use APP permission for longer token lifetime
-        token_command = f'salt/{salt}/jdev/sys/getjwt/{user_hash}/{user}/{LoxoneServer.Permission.WEB.value}/{LoxoneServer.CLIENT_ID}/{LoxoneServer.CLIENT_NAME}'
-        encrypted_command = LoxoneServer.AuthenticationUtil.encrypt_command(aes_key, aes_iv, token_command)
-        await LoxoneServer.MessageBody.sendMessage(websocket, f'jdev/sys/enc/{encrypted_command}')
-        header = await LoxoneServer.MessageHeader.parse(websocket)
-        assert header.identifier == LoxoneServer.MessageHeader.Identifier.TEXT, 'expected text (json) message'
-        await LoxoneServer.MessageBody.parseJsonMessage(websocket)
+            # TODO maybe use APP permission for longer token lifetime
+            token_command = f'salt/{salt}/jdev/sys/getjwt/{user_hash}/{user}/{LoxoneServer.Permission.WEB.value}/{LoxoneServer.CLIENT_ID}/{LoxoneServer.CLIENT_NAME}'
+            encrypted_command = LoxoneServer.AuthenticationUtil.encrypt_command(aes_key, aes_iv, token_command)
+            await LoxoneServer.MessageBody.sendMessage(websocket, f'jdev/sys/enc/{encrypted_command}')
+            header = await LoxoneServer.MessageHeader.parse(websocket)
+            assert header.identifier == LoxoneServer.MessageHeader.Identifier.TEXT, 'expected text (json) message'
+            message = await LoxoneServer.MessageBody.parseJsonMessage(websocket)
 
-        # get current values
-        await LoxoneServer.MessageBody.sendMessage(websocket, 'jdev/sps/enablebinstatusupdate')
-        header = await LoxoneServer.MessageHeader.parse(websocket)
-        assert header.identifier == LoxoneServer.MessageHeader.Identifier.TEXT, 'expected text (json) message'
-        await LoxoneServer.MessageBody.parseJsonMessage(websocket)
+            # get current values
+            await LoxoneServer.MessageBody.sendMessage(websocket, 'jdev/sps/enablebinstatusupdate')
+            header = await LoxoneServer.MessageHeader.parse(websocket)
+            assert header.identifier == LoxoneServer.MessageHeader.Identifier.TEXT, 'expected text (json) message'
+            message = await LoxoneServer.MessageBody.parseJsonMessage(websocket)
 
-        try:
             # start keepalive and process updates
             keepalive_task = asyncio.create_task(keepalive(websocket, 60))
             process_updates_task = asyncio.create_task(process_updates(websocket))
@@ -131,8 +127,8 @@ async def listen(server: str, user: str, password) -> None:
             for task in done:
                 if task.exception():
                     raise task.exception()
-        except websockets.ConnectionClosed as e:
-            LOGGER.error(f'connection closed with code {e.code}')
+    except websockets.ConnectionClosed as e:
+        LOGGER.error(f'connection closed with code {e.code}')
 
 
 def main() -> None:
@@ -140,7 +136,7 @@ def main() -> None:
     parser.add_argument('--server', default='miniserver', type=str, help='Loxone miniserver hostname')
     parser.add_argument('--user', default='loxone', type=str, help='Username to authenticate with')
     parser.add_argument('--password', default='loxone', type=str, help='Password to authenticate with')
-    parser.add_argument('--log-level', default='WARNING', choices=['DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL'], help='Set the logging level')
+    parser.add_argument('--log-level', default='INFO', choices=['DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL'], help='Set the logging level')
     arguments = parser.parse_args()
 
     log_level = getattr(logging, arguments.log_level.upper())
@@ -151,4 +147,8 @@ def main() -> None:
 
 
 if __name__ == '__main__':
+    # Configure the logger
+    logging.basicConfig(level=logging.WARNING,
+                    format='%(asctime)s - %(name)-12s - %(levelname)-8s - %(message)s',
+                    handlers=[logging.StreamHandler()])
     main()
