@@ -103,6 +103,12 @@ async def listen(server: str, user: str, password) -> None:
             assert header.identifier == LoxoneServer.MessageHeader.Identifier.TEXT, 'expected text (json) message'
             message = await LoxoneServer.MessageBody.parseJsonMessage(websocket)
 
+            # get strucuture file
+            await LoxoneServer.MessageBody.sendMessage(websocket, 'data/LoxAPP3.json')
+            header = await LoxoneServer.MessageHeader.parse(websocket)
+            assert header.identifier == LoxoneServer.MessageHeader.Identifier.FILE, 'expected text (json) file'
+            message = await LoxoneServer.MessageBody.parseJsonMessage(websocket)
+
             # get current values
             await LoxoneServer.MessageBody.sendMessage(websocket, 'jdev/sps/enablebinstatusupdate')
             header = await LoxoneServer.MessageHeader.parse(websocket)
