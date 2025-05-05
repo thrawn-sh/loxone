@@ -101,7 +101,7 @@ class LoxoneServer:
             assert identifier is not None, 'unknown message identifier'
             if info == LoxoneServer.MessageHeader.__ESTIMATION_HEADER:
                 LoxoneServer.MessageHeader.__LOGGER.debug('estimation header => skipping waiting for correct header')
-                return LoxoneServer.MessageHeader.parse(websocket)
+                return await LoxoneServer.MessageHeader.parse(websocket)
             assert reserved == LoxoneServer.MessageHeader.__RESERVED, 'reserved must be empty'
             return LoxoneServer.MessageHeader(identifier, size)
 
