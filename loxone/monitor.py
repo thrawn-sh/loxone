@@ -141,7 +141,7 @@ def main() -> None:
 
     log_level = getattr(logging, arguments.log_level.upper())
     LOGGER.setLevel(log_level)
-    logging.getLogger('loxone.loxone_server').setLevel(log_level)
+    logging.getLogger('LoxoneServer').setLevel(log_level)
 
     asyncio.run(listen(arguments.server, arguments.user, arguments.password))
 
@@ -149,6 +149,6 @@ def main() -> None:
 if __name__ == '__main__':
     # Configure the logger
     logging.basicConfig(level=logging.WARNING,
-                    format='%(asctime)s - %(name)-12s - %(levelname)-8s - %(message)s',
+                    format='%(asctime)s - %(name)-26s - %(levelname)-8s - %(message)s',
                     handlers=[logging.StreamHandler()])
     main()
