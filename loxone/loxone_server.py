@@ -77,7 +77,7 @@ class LoxoneServer:
                     return None
 
         __ESTIMATION_HEADER = 0x80
-        __LOGGER = logging.getLogger('LoxoneServer.MessageHeader')
+        __LOGGER = logging.getLogger('loxone.LoxoneServer.MessageHeader')
         __PREFIX = 0x03
         __RESERVED = 0x0
 
@@ -107,7 +107,7 @@ class LoxoneServer:
 
     class MessageBody:
 
-        __LOGGER = logging.getLogger('LoxoneServer.MessageBody')
+        __LOGGER = logging.getLogger('loxone.LoxoneServer.MessageBody')
 
         @staticmethod
         async def parseTextMessage(websocket: websockets.WebSocketClientProtocol) -> str:
@@ -148,7 +148,7 @@ class LoxoneServer:
 
     class RestClient:
 
-        __LOGGER = logging.getLogger('LoxoneServer.RestClient')
+        __LOGGER = logging.getLogger('loxone.LoxoneServer.RestClient')
 
         class MiniserverInfo:
 
