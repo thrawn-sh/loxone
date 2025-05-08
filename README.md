@@ -16,6 +16,14 @@ $> poetry run flake8
 $> poetry build
 ```
 
+## Build package
+```sh
+# automatically pull minor updates
+$> poetry update
+# list all major updates
+$> poetry show --latest --outdated --top-level
+```
+
 ### Extract mapping part for config into ini file
 ```sh
 $> ./bin/download_miniserver --server="<MINISERVER>" --user="<LOXONE_USER>" --password="<LOXONE_PASSWORD>" --output="<LOXONE_CONFIGURATION>"
