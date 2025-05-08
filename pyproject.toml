@@ -10,16 +10,16 @@ readme = "README.md"
 argparse = "^1.4.0"
 psycopg = "^3.1.1"
 python = "^3.9"
-tzlocal = "^4.2"
-pyftpdlib = "^1.5.7"
+tzlocal = "^5.0.0"
+pyftpdlib = "^2.0.0"
 requests = "^2.28.1"
 python-dateutil = "^2.8.2"
 pycryptodome = "^3.16.0"
-websockets = "^10.4"
+websockets = "^15.0.0"
 
 [tool.poetry.dev-dependencies]
-flake9 = "^3.8.3"
-pyupgrade = "^2.37.3"
+flake8 = "^7.2.0"
+pyupgrade = "^3.0.0"
 
 [build-system]
 requires = ["poetry-core>=1.0.0"]
