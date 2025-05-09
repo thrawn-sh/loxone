@@ -1,20 +1,21 @@
 [tool.poetry]
 name = "loxone"
 version = "1.0.0"
-description = "extract statistics from Loxone Miniserver"
+description = "Event monitoring for Loxone Miniserver"
 authors = ["Alexander Dreweke <thrawn@shadowhunt.de>"]
 license = "GPL-3.0-or-later"
 readme = "README.md"
 
 [tool.poetry.dependencies]
 argparse = "^1.4.0"
-psycopg = "^3.1.1"
-python = "^3.9"
-tzlocal = "^5.0.0"
-pyftpdlib = "^2.0.0"
-requests = "^2.28.1"
-python-dateutil = "^2.8.2"
+asyncio = "^3.4.3"
+asyncpg = "^0.30.0"
 pycryptodome = "^3.16.0"
+pyftpdlib = "^2.0.0"
+python = "^3.9"
+python-dateutil = "^2.8.2"
+requests = "^2.28.1"
+tzlocal = "^5.0.0"
 websockets = "^15.0.0"
 
 [tool.poetry.dev-dependencies]
