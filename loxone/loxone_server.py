@@ -22,17 +22,17 @@ class LoxoneServer:
 
     class AuthenticationUtil:
 
-        __UTF8 = 'utf-8'
+        _UTF8 = 'utf-8'
 
         @staticmethod
         def create_session_key(aes_key: str, aes_iv: str, public_key: str) -> str:
             pub_key = RSA.importKey(public_key)
             encryptor = PKCS1_v1_5.new(pub_key)
-            sessionkey = encryptor.encrypt(bytes(f'{aes_key}:{aes_iv}', LoxoneServer.AuthenticationUtil.__UTF8))
+            sessionkey = encryptor.encrypt(bytes(f'{aes_key}:{aes_iv}', LoxoneServer.AuthenticationUtil._UTF8))
             return base64.b64encode(sessionkey).decode()
 
         @staticmethod
-        def __zero_pad(message: bytes) -> bytes:
+        def _zero_pad(message: bytes) -> bytes:
             size = AES.block_size
             return message + b'\0' * (size - len(message) % size)
 
@@ -41,7 +41,7 @@ class LoxoneServer:
             key = binascii.unhexlify(aes_key)
             iv = binascii.unhexlify(aes_iv)
             cipher = AES.new(key, AES.MODE_CBC, iv=iv)
-            padded = LoxoneServer.AuthenticationUtil.__zero_pad(bytes(command, LoxoneServer.AuthenticationUtil.__UTF8))
+            padded = LoxoneServer.AuthenticationUtil._zero_pad(bytes(command, LoxoneServer.AuthenticationUtil._UTF8))
             encrypted_msg = cipher.encrypt(padded)
             b64encoded = base64.b64encode(encrypted_msg)
             return urllib.parse.quote(b64encoded, safe='')
@@ -49,10 +49,10 @@ class LoxoneServer:
         @staticmethod
         def calculate_hash(user: str, password: str, hash_algo: str, key: str, salt: str) -> str:
             password_cipher = hashlib.new(hash_algo)
-            password_cipher.update(bytes(f'{password}:{salt}', LoxoneServer.AuthenticationUtil.__UTF8))
+            password_cipher.update(bytes(f'{password}:{salt}', LoxoneServer.AuthenticationUtil._UTF8))
             password_hash = password_cipher.hexdigest()
             password_hash = password_hash.upper()
-            message = bytes(f'{user}:{password_hash}', LoxoneServer.AuthenticationUtil.__UTF8)
+            message = bytes(f'{user}:{password_hash}', LoxoneServer.AuthenticationUtil._UTF8)
             binary_key = binascii.unhexlify(key)
             token_cipher = hmac.new(binary_key, message, hash_algo)
             return token_cipher.hexdigest()
@@ -76,10 +76,10 @@ class LoxoneServer:
                 except ValueError:
                     return None
 
-        __ESTIMATION_HEADER = 0x80
-        __LOGGER = logging.getLogger('loxone.LoxoneServer.MessageHeader')
-        __PREFIX = 0x03
-        __RESERVED = 0x0
+        _ESTIMATION_HEADER = 0x80
+        _LOGGER = logging.getLogger('loxone.LoxoneServer.MessageHeader')
+        _PREFIX = 0x03
+        _RESERVED = 0x0
 
         def __init__(self, identifier: 'LoxoneServer.MessageHeader.Identifier', size: int) -> 'LoxoneServer.MessageHeader':
             self.identifier = identifier
@@ -90,44 +90,44 @@ class LoxoneServer:
 
         @staticmethod
         async def parse(websocket: websockets.WebSocketClientProtocol) -> 'LoxoneServer.MessageHeader':
-            LoxoneServer.MessageHeader.__LOGGER.debug('waiting for header message')
+            LoxoneServer.MessageHeader._LOGGER.debug('waiting for header message')
             message = await websocket.recv()
 
-            LoxoneServer.MessageHeader.__LOGGER.debug(f'header: {message}')
+            LoxoneServer.MessageHeader._LOGGER.debug(f'header: {message}')
             bin_type, identifier, info, reserved, size = struct.unpack_from('<BBBBI', message)
 
-            assert bin_type == LoxoneServer.MessageHeader.__PREFIX, 'must be binary type (0x03)'
+            assert bin_type == LoxoneServer.MessageHeader._PREFIX, 'must be binary type (0x03)'
             identifier = LoxoneServer.MessageHeader.Identifier.convert(identifier)
             assert identifier is not None, 'unknown message identifier'
-            if info == LoxoneServer.MessageHeader.__ESTIMATION_HEADER:
-                LoxoneServer.MessageHeader.__LOGGER.debug('estimation header => skipping waiting for correct header')
+            if info == LoxoneServer.MessageHeader._ESTIMATION_HEADER:
+                LoxoneServer.MessageHeader._LOGGER.debug('estimation header => skipping waiting for correct header')
                 return await LoxoneServer.MessageHeader.parse(websocket)
-            assert reserved == LoxoneServer.MessageHeader.__RESERVED, 'reserved must be empty'
+            assert reserved == LoxoneServer.MessageHeader._RESERVED, 'reserved must be empty'
             return LoxoneServer.MessageHeader(identifier, size)
 
     class MessageBody:
 
-        __LOGGER = logging.getLogger('loxone.LoxoneServer.MessageBody')
+        _LOGGER = logging.getLogger('loxone.LoxoneServer.MessageBody')
 
         @staticmethod
         async def parseTextMessage(websocket: websockets.WebSocketClientProtocol) -> str:
-            LoxoneServer.MessageBody.__LOGGER.debug('waiting for text message')
+            LoxoneServer.MessageBody._LOGGER.debug('waiting for text message')
             message = await websocket.recv()
-            LoxoneServer.MessageBody.__LOGGER.debug('text: RECEIVED')
+            LoxoneServer.MessageBody._LOGGER.debug('text: RECEIVED')
             return message
 
         @staticmethod
         async def parseJsonMessage(websocket: websockets.WebSocketClientProtocol) -> dict[str, any]:
-            LoxoneServer.MessageBody.__LOGGER.debug('waiting for json message')
+            LoxoneServer.MessageBody._LOGGER.debug('waiting for json message')
             message = await websocket.recv()
-            LoxoneServer.MessageBody.__LOGGER.debug('json: RECEIVED')
+            LoxoneServer.MessageBody._LOGGER.debug('json: RECEIVED')
             return json.loads(message)
 
         @staticmethod
         async def parseValueStates(websocket: websockets.WebSocketClientProtocol) -> dict[str, float]:
-            LoxoneServer.MessageBody.__LOGGER.debug('waiting for value-state message')
+            LoxoneServer.MessageBody._LOGGER.debug('waiting for value-state message')
             message = await websocket.recv()
-            LoxoneServer.MessageBody.__LOGGER.debug('value-state: RECEIVED')
+            LoxoneServer.MessageBody._LOGGER.debug('value-state: RECEIVED')
             result = dict()
             for i in range(0, len(message), 24):
                 uuid = struct.unpack_from('<I2H8B', message, i)
@@ -139,7 +139,7 @@ class LoxoneServer:
 
         @staticmethod
         async def sendMessage(websocket: websockets.WebSocketClientProtocol, message: str) -> None:
-            LoxoneServer.MessageBody.__LOGGER.debug(f'sending: {message}')
+            LoxoneServer.MessageBody._LOGGER.debug(f'sending: {message}')
             await websocket.send(message)
 
         @staticmethod
@@ -148,7 +148,7 @@ class LoxoneServer:
 
     class RestClient:
 
-        __LOGGER = logging.getLogger('loxone.LoxoneServer.RestClient')
+        _LOGGER = logging.getLogger('loxone.LoxoneServer.RestClient')
 
         class MiniserverInfo:
 
@@ -174,7 +174,7 @@ class LoxoneServer:
             response = requests.get(f'http://{hostname}/jdev/cfg/apiKey', allow_redirects=True)
             assert response.status_code == 200, 'failed to get info'
             response = response.json()
-            LoxoneServer.RestClient.__LOGGER.debug(f'response: {response}')
+            LoxoneServer.RestClient._LOGGER.debug(f'response: {response}')
             assert response['LL']['control'] == 'dev/cfg/apiKey', 'unexpected control'
             assert response['LL']['Code'] == '200', 'unexpected code'
             value: str = response['LL']['value']
@@ -187,7 +187,7 @@ class LoxoneServer:
             response = requests.get(f'http://{server}/jdev/sys/getPublicKey', allow_redirects=True)
             assert response.status_code == 200, 'failed to get public key'
             response = response.json()
-            LoxoneServer.RestClient.__LOGGER.debug(f'response: {response}')
+            LoxoneServer.RestClient._LOGGER.debug(f'response: {response}')
             assert response['LL']['control'] == 'dev/sys/getPublicKey', f'unexpected control: {response}'
             assert response['LL']['Code'] == '200', f'unexpected code: {response}'
             value: str = response['LL']['value']
