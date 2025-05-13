@@ -21,6 +21,7 @@ AES_IV_LENGTH = 16
 
 DATALOCK = asyncio.Lock()
 
+
 async def keepalive(websocket: websockets.ClientConnection, sleep: int) -> None:
     while True:
         await asyncio.sleep(sleep)
@@ -65,7 +66,7 @@ async def persist(building: Building, uri: str, cron: str) -> None:
                     if not building.populated:
                         LOGGER.info('building not yet populated')
                         continue
-                    
+
                     LOGGER.info(f'persisting data @ {now}')
                     for room in building.rooms:
                         await connection.execute(
