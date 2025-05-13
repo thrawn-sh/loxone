@@ -3,12 +3,15 @@
 
 import argparse
 import asyncio
+import asyncpg
+import croniter
+import datetime
 import secrets
 import logging
 import websockets
 
 from loxone.loxone_server import LoxoneServer
-
+from loxone.model import Building
 
 # Create a global logger
 LOGGER = logging.getLogger('loxone.monitor')
@@ -16,43 +19,76 @@ LOGGER = logging.getLogger('loxone.monitor')
 AES_KEY_LENGTH = 32
 AES_IV_LENGTH = 16
 
-async def keepalive(websocket: websockets.WebSocketClientProtocol, sleep: int) -> None:
-    try:
-        while True:
-            await asyncio.sleep(sleep)
-            await LoxoneServer.MessageBody.sendKeepAlive(websocket)
-            LOGGER.debug('keepalive sent')
-    except Exception as e:
-        LOGGER.error(f'keepalive error: {e}')
-        raise
+DATALOCK = asyncio.Lock()
+
+async def keepalive(websocket: websockets.ClientConnection, sleep: int) -> None:
+    while True:
+        await asyncio.sleep(sleep)
+        await LoxoneServer.MessageBody.sendKeepAlive(websocket)
+        LOGGER.debug('keepalive sent')
 
 
-async def process_updates(websocket: websockets.WebSocketClientProtocol) -> None:
-    try:
-        while True:
-            header = await LoxoneServer.MessageHeader.parse(websocket)
-            if header.identifier == LoxoneServer.MessageHeader.Identifier.KEEPALIVE:
-                LOGGER.debug('keepalive => no message body')
-                continue
+async def process_updates(websocket: websockets.ClientConnection, building: Building) -> None:
+    while True:
+        header = await LoxoneServer.MessageHeader.parse(websocket)
+        if header.identifier == LoxoneServer.MessageHeader.Identifier.KEEPALIVE:
+            LOGGER.debug('keepalive => no message body')
+            continue
 
-            if header.size == 0:
-                LOGGER.debug('no message to be expected')
-                continue
+        if header.size == 0:
+            LOGGER.debug('no message to be expected')
+            continue
 
-            if header.identifier == LoxoneServer.MessageHeader.Identifier.VALUE_STATES:
-                states = await LoxoneServer.MessageBody.parseValueStates(websocket)
-                LOGGER.info(states)
-                continue
+        if header.identifier == LoxoneServer.MessageHeader.Identifier.VALUE_STATES:
+            states = await LoxoneServer.MessageBody.parseValueStates(websocket)
+            async with DATALOCK:
+                for id, value in states.items():
+                    building.update(id, value)
+                building.populated = True
+            continue
 
-            # unsupported message
-            await websocket.recv()
-            LOGGER.debug(f'unsupported message of type {header.identifier}: SKIPPING')
-    except Exception as e:
-        LOGGER.error(f'process_updates error: {e}')
-        raise
+        # unsupported message
+        await websocket.recv()
+        LOGGER.debug(f'unsupported message of type {header.identifier}: SKIPPING')
 
 
-async def listen(server: str, user: str, password) -> None:
+async def persist(building: Building, uri: str, cron: str) -> None:
+    while True:
+        now = datetime.datetime.now()
+        cron = croniter.croniter(cron, now)
+        sleep = (cron.get_next(datetime.datetime) - now).total_seconds()
+        LOGGER.info(f'sleeping for {sleep} seconds until next persistence')
+        await asyncio.sleep(sleep)
+        async with await asyncpg.connect(uri) as connection:
+            async with connection.transaction():
+                async with DATALOCK:
+                    if not building.populated:
+                        LOGGER.info('building not yet populated')
+                        continue
+                    
+                    LOGGER.info(f'persisting data @ {now}')
+                    for room in building.rooms:
+                        await connection.execute(
+                            '''
+                            INSERT INTO room (time, id, name, temperature, temperature_target, humidity, light, shading, valve, ventilation, precence)
+                            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+                            ON CONFLICT (time, id) DO NOTHING
+                            ''',
+                            now.replace(second=0, microsecond=0),
+                            room.id,
+                            room.name,
+                            room.temperature.getValue(),
+                            room.temperatureTarget.getValue(),
+                            room.humidity.getValue(),
+                            room.light.getValue(),
+                            room.shading.getValue(),
+                            room.valve.getValue(),
+                            room.ventilation.getValue(),
+                            room.precence.getValue()
+                        )
+
+
+async def listen(server: str, user: str, password, db_uri: str, persist_interval: str) -> None:
     # Step 1
     info = LoxoneServer.RestClient.get_info(server)
 
@@ -79,7 +115,8 @@ async def listen(server: str, user: str, password) -> None:
             # Step 7
             await LoxoneServer.MessageBody.sendMessage(websocket, f'jdev/sys/keyexchange/{session_key}')
             header = await LoxoneServer.MessageHeader.parse(websocket)
-            assert header.identifier == LoxoneServer.MessageHeader.Identifier.TEXT, 'expected text (json) message'
+            if header.identifier != LoxoneServer.MessageHeader.Identifier.TEXT:
+                raise AssertionError('expected text (json) message')
             message = await LoxoneServer.MessageBody.parseJsonMessage(websocket)
 
             # Step 8
@@ -89,39 +126,64 @@ async def listen(server: str, user: str, password) -> None:
             # Step 9.b
             await LoxoneServer.MessageBody.sendMessage(websocket, f'jdev/sys/getkey2/{user}')
             header = await LoxoneServer.MessageHeader.parse(websocket)
-            assert header.identifier == LoxoneServer.MessageHeader.Identifier.TEXT, 'expected text (json) message'
+            if header.identifier != LoxoneServer.MessageHeader.Identifier.TEXT:
+                raise AssertionError('expected text (json) message')
             message = await LoxoneServer.MessageBody.parseJsonMessage(websocket)
-            assert message['LL']['control'] == f'jdev/sys/getkey2/{user}', f'unexpected control: {message}'
-            assert message['LL']['code'] == '200', f'unexpected code: {message}'
+            if message['LL']['control'] != f'jdev/sys/getkey2/{user}':
+                raise AssertionError(f'unexpected control: {message}')
+            if message['LL']['code'] != '200':
+                raise AssertionError(f'unexpected code: {message}')
             user_hash = LoxoneServer.AuthenticationUtil.calculate_hash(user, password, message['LL']['value']['hashAlg'], message['LL']['value']['key'], message['LL']['value']['salt'])
+            if header.identifier != LoxoneServer.MessageHeader.Identifier.TEXT:
+                raise AssertionError('expected text (json) message')
+            if message['LL']['control'] != f'jdev/sys/getkey2/{user}':
+                raise AssertionError(f'unexpected control: {message}')
+            if message['LL']['code'] != '200':
+                raise AssertionError(f'unexpected code: {message}')
 
             # TODO maybe use APP permission for longer token lifetime
             token_command = f'salt/{salt}/jdev/sys/getjwt/{user_hash}/{user}/{LoxoneServer.Permission.WEB.value}/{LoxoneServer.CLIENT_ID}/{LoxoneServer.CLIENT_NAME}'
             encrypted_command = LoxoneServer.AuthenticationUtil.encrypt_command(aes_key, aes_iv, token_command)
             await LoxoneServer.MessageBody.sendMessage(websocket, f'jdev/sys/enc/{encrypted_command}')
             header = await LoxoneServer.MessageHeader.parse(websocket)
-            assert header.identifier == LoxoneServer.MessageHeader.Identifier.TEXT, 'expected text (json) message'
+            if header.identifier != LoxoneServer.MessageHeader.Identifier.TEXT:
+                raise AssertionError('expected text (json) message')
             message = await LoxoneServer.MessageBody.parseJsonMessage(websocket)
 
             # get strucuture file
+            LOGGER.info('getting structure file')
             await LoxoneServer.MessageBody.sendMessage(websocket, 'data/LoxAPP3.json')
             header = await LoxoneServer.MessageHeader.parse(websocket)
-            assert header.identifier == LoxoneServer.MessageHeader.Identifier.FILE, 'expected text (json) file'
+            if header.identifier != LoxoneServer.MessageHeader.Identifier.FILE:
+                raise AssertionError('expected text (json) file')
             message = await LoxoneServer.MessageBody.parseJsonMessage(websocket)
+            building = Building(message)
 
             # get current values
+            LOGGER.info('requesting status update')
             await LoxoneServer.MessageBody.sendMessage(websocket, 'jdev/sps/enablebinstatusupdate')
             header = await LoxoneServer.MessageHeader.parse(websocket)
-            assert header.identifier == LoxoneServer.MessageHeader.Identifier.TEXT, 'expected text (json) message'
+            if header.identifier != LoxoneServer.MessageHeader.Identifier.TEXT:
+                raise AssertionError('expected text (json) message')
             message = await LoxoneServer.MessageBody.parseJsonMessage(websocket)
+            if message['LL']['control'] != 'dev/sps/enablebinstatusupdate':
+                raise AssertionError(f'unexpected control: {message}')
+            if message['LL']['value'] != '1':
+                raise AssertionError(f'unexpected value: {message}')
+            if message['LL']['Code'] != '200':
+                raise AssertionError(f'unexpected code: {message}')
 
             # start keepalive and process updates
+            LOGGER.info('starting keepalive task')
             keepalive_task = asyncio.create_task(keepalive(websocket, 60))
-            process_updates_task = asyncio.create_task(process_updates(websocket))
+            LOGGER.info('starting updates monitoring task')
+            process_updates_task = asyncio.create_task(process_updates(websocket, building))
+            LOGGER.info('starting data persistence task')
+            persist_task = asyncio.create_task(persist(building, db_uri, persist_interval))
 
             # wait for either task to complete
             done, pending = await asyncio.wait(
-                [keepalive_task, process_updates_task],
+                [keepalive_task, process_updates_task, persist_task],
                 return_when=asyncio.FIRST_EXCEPTION
             )
 
@@ -134,27 +196,40 @@ async def listen(server: str, user: str, password) -> None:
                 if task.exception():
                     raise task.exception()
     except websockets.ConnectionClosed as e:
+        if e.code == 1000:
+            LOGGER.info('connection closed cleanly')
+            return
         LOGGER.error(f'connection closed with code {e.code}')
+        raise e
+
+
+async def process(arguments) -> None:
+    while True:
+        LOGGER.info(f'connecting to Loxone... {arguments.server}')
+        await listen(arguments.server, arguments.user, arguments.password, arguments.db_uri, arguments.perist_interval)
+        LOGGER.info('connection closed, retrying in 20 seconds...')
+        await asyncio.sleep(20)
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(description='export data from Loxone to PostgreSQL', formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    parser.add_argument('--server', default='miniserver', type=str, help='Loxone miniserver hostname')
-    parser.add_argument('--user', default='loxone', type=str, help='Username to authenticate with')
-    parser.add_argument('--password', default='loxone', type=str, help='Password to authenticate with')
+    parser.add_argument('--server', type=str, help='Loxone miniserver hostname', required=True)
+    parser.add_argument('--user', type=str, help='Username to authenticate with', required=True)
+    parser.add_argument('--password', type=str, help='Password to authenticate with', required=True)
+    parser.add_argument('--db-uri', type=str, help='PostgreSQL connection URI postgresql://user:password@hostname/database', required=True)
+    parser.add_argument('--perist-interval', type=str, help='Cron expression for data persistence', default='*/10 * * * *')
     parser.add_argument('--log-level', default='INFO', choices=['DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL'], help='Set the logging level')
     arguments = parser.parse_args()
 
     log_level = getattr(logging, arguments.log_level.upper())
-    LOGGER.setLevel(log_level)
-    logging.getLogger('LoxoneServer').setLevel(log_level)
+    logging.getLogger('loxone').setLevel(log_level)
 
-    asyncio.run(listen(arguments.server, arguments.user, arguments.password))
+    asyncio.run(process(arguments))
 
 
 if __name__ == '__main__':
     # Configure the logger
     logging.basicConfig(level=logging.WARNING,
-                    format='%(asctime)s - %(name)-26s - %(levelname)-8s - %(message)s',
-                    handlers=[logging.StreamHandler()])
+                        format='%(asctime)s - %(name)-26s - %(levelname)-8s - %(message)s',
+                        handlers=[logging.StreamHandler()])
     main()
