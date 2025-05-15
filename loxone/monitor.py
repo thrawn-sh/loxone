@@ -58,15 +58,15 @@ async def persist(building: Building, uri: str, cron: str) -> None:
         now = datetime.datetime.now()
         cron = croniter.croniter(cron, now)
         sleep = (cron.get_next(datetime.datetime) - now).total_seconds()
-        LOGGER.info(f'sleeping for {sleep} seconds until next persistence')
+        LOGGER.debug(f'sleeping for {sleep} seconds until next persistence')
         await asyncio.sleep(sleep)
-        async with await asyncpg.connect(uri) as connection:
-            async with connection.transaction():
-                async with DATALOCK:
-                    if not building.populated:
-                        LOGGER.info('building not yet populated')
-                        continue
-
+        async with DATALOCK:
+            if not building.populated:
+                LOGGER.info('building not yet populated')
+                continue
+            async with await asyncpg.connect(uri) as connection:
+                async with connection.transaction():
+                    now = now.replace(second=0, microsecond=0)
                     LOGGER.info(f'persisting data @ {now}')
                     for room in building.rooms:
                         await connection.execute(
@@ -75,7 +75,7 @@ async def persist(building: Building, uri: str, cron: str) -> None:
                             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
                             ON CONFLICT (time, id) DO NOTHING
                             ''',
-                            now.replace(second=0, microsecond=0),
+                            now,
                             room.id,
                             room.name,
                             room.temperature.getValue(),
