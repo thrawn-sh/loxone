@@ -151,7 +151,7 @@ class Room:
         self.id: uuid.UUID = uuid.UUID(room['uuid'])
         self.name: str = room['name']
 
-        controls = [control for _, control in structureFile['controls'].items() if control.get('room') == self.id]
+        controls = [control for _, control in structureFile['controls'].items() if control.get('room') == room['uuid']]
         heatingControls = [
             hc for hc in controls if hc.get('type') == 'IRoomControllerV2'
         ]
