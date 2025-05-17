@@ -53,10 +53,10 @@ async def process_updates(websocket: websockets.ClientConnection, building: Buil
         LOGGER.debug(f'unsupported message of type {header.identifier}: SKIPPING')
 
 
-async def persist(building: Building, uri: str, cron: str) -> None:
+async def persist(building: Building, uri: str, persist_interval: str) -> None:
     while True:
         now = datetime.datetime.now()
-        cron = croniter.croniter(cron, now)
+        cron = croniter.croniter(persist_interval, now)
         sleep = (cron.get_next(datetime.datetime) - now).total_seconds()
         LOGGER.debug(f'sleeping for {sleep} seconds until next persistence')
         await asyncio.sleep(sleep)
