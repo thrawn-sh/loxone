@@ -152,7 +152,7 @@ class LoxoneServer:
 
         class MiniserverInfo:
 
-            def __init__(self, json: dict[str, any]) -> 'LoxoneServer.RestClient.MiniserverInfo':
+            def __init__(self, json: dict[str, any], server: str) -> 'LoxoneServer.RestClient.MiniserverInfo':
                 self.snr = json['snr']
                 self.version = json['version']
                 self.key = json['key']
@@ -161,10 +161,14 @@ class LoxoneServer:
                     ip = json['address'].replace('.', '-')
                     serial = json['snr'].replace(':', '')
                     hostname = f'{ip}.{serial}.dyndns.loxonecloud.com'
-                if json.get('httpsStatus', 0) == 1:
-                    self.ws_base_url = f'wss://{hostname}'
                 else:
-                    self.ws_base_url = f'ws://{hostname}'
+                    hostname = server
+
+                protocol = 'ws'
+                if json.get('httpsStatus', 0) == 1:
+                    protocol = 'wss'
+
+                self.ws_base_url = f'{protocol}://{hostname}'
 
             def __str__(self):
                 return f'MiniserverInfo(snr: {self.snr}, version: {self.version}, key: {self.key}, isInTrust: {self.is_in_trust}, http_base_url: {self.http_base_url}, ws_base_url: {self.ws_base_url})'
@@ -180,7 +184,7 @@ class LoxoneServer:
             value: str = response['LL']['value']
             value = value.replace("'", '"')  # make json loadable
             value = json.loads(value)
-            return LoxoneServer.RestClient.MiniserverInfo(value)
+            return LoxoneServer.RestClient.MiniserverInfo(value, hostname)
 
         @staticmethod
         def get_public_key(server: str) -> str:
