@@ -12,41 +12,45 @@ class Entity(abc.ABC):
 
 
 class RawValue(Entity):
-    def __init__(self, id: str, registry: any) -> None:
+    def __init__(self, id: str, registry: any, changeResponse: bool = True) -> None:
         self.id = id
         self.value: bool | float = None
+        self.changeResponse = changeResponse
         registry.register(id, Callback(id, self))
 
     def getValue(self) -> bool | float:
         return self.value
 
-    def setValue(self, value: bool | float) -> None:
+    def setValue(self, value: bool | float) -> bool:
         if self.value == value:
-            return
+            return False
+        Registry._LOGGER.info(f'setting {self.id} to {value}')
         self.value = value
+        return self.changeResponse
 
 
 class BoolValue(RawValue):
-    def __init__(self, id: str, registry: any) -> None:
-        super().__init__(id, registry)
+    def __init__(self, id: str, registry: any, changeResponse: bool = True) -> None:
+        super().__init__(id, registry, changeResponse)
 
-    def setValue(self, value: float) -> None:
+    def setValue(self, value: float) -> bool:
         if value is None:
-            super().setValue(None)
+            return super().setValue(None)
         else:
-            super().setValue(bool(value))
+            return super().setValue(bool(value))
 
 
 class RoundedValue(RawValue):
-    def __init__(self, id: str, registry: any, scale: float = 1) -> None:
-        super().__init__(id, registry)
+    def __init__(self, id: str, registry: any, scale: float = 0.1, changeResponse: bool = True) -> None:
+        super().__init__(id, registry, changeResponse)
         self.scale = scale
 
-    def setValue(self, value: float) -> None:
+    def setValue(self, value: float) -> bool:
         if value is None:
-            super().setValue(None)
+            return super().setValue(None)
         else:
-            super().setValue(round(self.scale * value * 2) / 2)
+            # round to nearest multiple of scale
+            return super().setValue(round(value / self.scale) * self.scale)
 
 
 class Aggreate(Entity):
@@ -55,24 +59,36 @@ class Aggreate(Entity):
 
 
 class OrAggregate(Aggreate):
+    def __init__(self, entities: list[BoolValue]) -> None:
+        super().__init__(entities)
+
     def getValue(self) -> bool:
         values = [entity.getValue() for entity in self.entities if entity.getValue() is not None]
         return any(values) if values else None
 
 
 class AndAggregate(Aggreate):
+    def __init__(self, entities: list[BoolValue]) -> None:
+        super().__init__(entities)
+
     def getValue(self) -> bool:
         values = [entity.getValue() for entity in self.entities if entity.getValue() is not None]
         return all(values) if values else None
 
 
 class MeanAggregate(Aggreate):
+    def __init__(self, entities: list[RoundedValue]) -> None:
+        super().__init__(entities)
+
     def getValue(self) -> float:
         values = [entity.getValue() for entity in self.entities if entity.getValue() is not None]
         return statistics.mean(values) if values else None
 
 
 class MedianAggregate(Aggreate):
+    def __init__(self, entities: list[RoundedValue]) -> None:
+        super().__init__(entities)
+
     def getValue(self) -> float:
         values = [entity.getValue() for entity in self.entities if entity.getValue() is not None]
         return statistics.median(values) if values else None
@@ -83,8 +99,8 @@ class Callback():
         self.id = id
         self.entity = entity
 
-    def update(self, value: float) -> float | bool | None:
-        self.entity.setValue(value)
+    def update(self, value: float) -> bool:
+        return self.entity.setValue(value)
 
 
 class Registry(abc.ABC):
@@ -127,12 +143,13 @@ class Registry(abc.ABC):
             raise ValueError(f'ID {id} already registered')
         self.registry[id] = function
 
-    def update(self, id: str, value: float) -> None:
+    def update(self, id: str, value: float) -> bool:
         if id in self.registry:
-            self._LOGGER.info(f'updating {id} to {value} ({self.typing[id]})')
-            self.registry[id].update(value)
+            self._LOGGER.debug(f'updating {id} to {value} ({self.typing[id]})')
+            return self.registry[id].update(value)
         else:
             self._LOGGER.debug(f'unregistered {id} to {value} ({self.typing.get(id, 'unknown')})')
+            return False
 
 
 class Building(Registry):
@@ -168,11 +185,11 @@ class Room:
             sc for sc in controls if sc.get('type') == 'Jalousie'
         ]
 
-        self.temperature: Entity = MeanAggregate([RoundedValue(hc['states']['tempActual'], registry) for hc in heatingControls])
-        self.temperatureTarget: Entity = MeanAggregate([RoundedValue(hc['states']['tempTarget'], registry) for hc in heatingControls])
-        self.humidity: Entity = MeanAggregate([RoundedValue(hc['states']['humidityActual'], registry) for hc in heatingControls])
+        self.temperature: Entity = MeanAggregate([RoundedValue(hc['states']['tempActual'], registry, 0.5, False) for hc in heatingControls])
+        self.temperatureTarget: Entity = MeanAggregate([RoundedValue(hc['states']['tempTarget'], registry, 0.5) for hc in heatingControls])
+        self.humidity: Entity = MeanAggregate([RoundedValue(hc['states']['humidityActual'], registry, 0.5, False) for hc in heatingControls])
         self.light: Entity = OrAggregate([BoolValue(sc['states']['active'], registry) for sc in switchControls])
-        self.shading: Entity = OrAggregate([RoundedValue(sc['states']['position'], registry, 100) for sc in shadesControls])
+        self.shading: Entity = MeanAggregate([RoundedValue(sc['states']['position'], registry, 1) for sc in shadesControls])
         self.valve: Entity = MeanAggregate([])
         self.ventilation: Entity = OrAggregate([BoolValue(hc['states']['openWindow'], registry) for hc in heatingControls])
         self.precence: Entity = OrAggregate([BoolValue(pc['states']['active'], registry) for pc in precenceControls])
