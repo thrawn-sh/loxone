@@ -148,7 +148,7 @@ class Registry(abc.ABC):
             self._LOGGER.debug(f'updating {id} to {value} ({self.typing[id]})')
             return self.registry[id].update(value)
         else:
-            self._LOGGER.debug(f'unregistered {id} to {value} ({self.typing.get(id, 'unknown')})')
+            self._LOGGER.debug(f'unregistered {id} to {value} ({self.typing.get(id, "unknown")})')
             return False
 
 
