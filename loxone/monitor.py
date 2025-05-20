@@ -6,6 +6,7 @@ import asyncio
 import asyncpg
 import croniter
 import datetime
+import json
 import secrets
 import logging
 import websockets
@@ -158,6 +159,9 @@ async def listen(server: str, user: str, password, db_uri: str, persist_interval
             if header.identifier != LoxoneServer.MessageHeader.Identifier.FILE:
                 raise AssertionError('expected text (json) file')
             message = await LoxoneServer.MessageBody.parseJsonMessage(websocket)
+            if LOGGER.isEnabledFor(logging.DEBUG):
+                with open("strucutredFile.json", "w", encoding="utf-8") as f:
+                    json.dump(message, f, indent=2, ensure_ascii=False)
             building = Building(message)
 
             # get current values
