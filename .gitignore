@@ -1,3 +1,4 @@
 *.log
 *.loxone
 __pycache__
+strucutredFile.json
