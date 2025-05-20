@@ -9,6 +9,7 @@ import datetime
 import json
 import secrets
 import logging
+import ssl
 import websockets
 
 from loxone.loxone_server import LoxoneServer
@@ -101,7 +102,12 @@ async def listen(server: str, user: str, password, db_uri: str, persist_interval
         # Step 3
         websocket_url = f'{info.ws_base_url}/ws/rfc6455'
         LOGGER.debug(f'connecting to {websocket_url}')
-        async with websockets.connect(websocket_url) as websocket:
+        ssl_context = ssl.create_default_context()
+        if not info.ws_base_url.endswith('dyndns.loxonecloud.com'):
+            LOGGER.info('disabling SSL certificate verification')
+            ssl_context.check_hostname = False
+            ssl_context.verify_mode = ssl.CERT_NONE
+        async with websockets.connect(websocket_url, ssl=ssl_context) as websocket:
             # Step 4
             aes_key = secrets.token_hex(AES_KEY_LENGTH)
             LOGGER.debug(f'aes_key: {aes_key}')
