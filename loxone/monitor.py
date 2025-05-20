@@ -104,7 +104,7 @@ async def listen(server: str, user: str, password, db_uri: str, persist_interval
         LOGGER.debug(f'connecting to {websocket_url}')
         ssl_context = ssl.create_default_context()
         if not info.ws_base_url.endswith('dyndns.loxonecloud.com'):
-            LOGGER.info('disabling SSL certificate verification')
+            LOGGER.warning('disabling SSL certificate verification, because server is conected locally')
             ssl_context.check_hostname = False
             ssl_context.verify_mode = ssl.CERT_NONE
         async with websockets.connect(websocket_url, ssl=ssl_context) as websocket:
