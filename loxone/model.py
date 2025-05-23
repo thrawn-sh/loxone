@@ -3,6 +3,7 @@ import datetime
 import statistics
 import logging
 import uuid
+from enum import Enum, auto
 
 
 class Entity(abc.ABC):
@@ -11,8 +12,15 @@ class Entity(abc.ABC):
         pass
 
 
+class ChangeResponse(Enum):
+    IMMEDIATE = 2
+    LATER = 1
+    NO = 0
+
+
 class RawValue(Entity):
-    def __init__(self, id: str, registry: any, changeResponse: bool = True) -> None:
+
+    def __init__(self, id: str, registry: any, changeResponse: ChangeResponse = ChangeResponse.LATER) -> None:
         self.id = id
         self.value: bool | float = None
         self.changeResponse = changeResponse
@@ -21,16 +29,16 @@ class RawValue(Entity):
     def getValue(self) -> bool | float:
         return self.value
 
-    def setValue(self, value: bool | float) -> bool:
+    def setValue(self, value: bool | float) -> ChangeResponse:
         if self.value == value:
-            return False
+            return ChangeResponse.NO
         Registry._LOGGER.info(f'setting {self.id} to {value}')
         self.value = value
         return self.changeResponse
 
 
 class BoolValue(RawValue):
-    def __init__(self, id: str, registry: any, changeResponse: bool = True) -> None:
+    def __init__(self, id: str, registry: any, changeResponse: ChangeResponse) -> None:
         super().__init__(id, registry, changeResponse)
 
     def setValue(self, value: float) -> bool:
@@ -41,7 +49,7 @@ class BoolValue(RawValue):
 
 
 class RoundedValue(RawValue):
-    def __init__(self, id: str, registry: any, scale: float = 0.1, changeResponse: bool = True) -> None:
+    def __init__(self, id: str, registry: any, changeResponse: ChangeResponse, scale: float = 0.1) -> None:
         super().__init__(id, registry, changeResponse)
         self.scale = scale
 
@@ -99,7 +107,7 @@ class Callback():
         self.id = id
         self.entity = entity
 
-    def update(self, value: float) -> bool:
+    def update(self, value: float) -> ChangeResponse:
         return self.entity.setValue(value)
 
 
@@ -143,13 +151,13 @@ class Registry(abc.ABC):
             raise ValueError(f'ID {id} already registered')
         self.registry[id] = function
 
-    def update(self, id: str, value: float) -> bool:
+    def update(self, id: str, value: float) -> ChangeResponse:
         if id in self.registry:
             self._LOGGER.debug(f'updating {id} to {value} ({self.typing[id]})')
             return self.registry[id].update(value)
         else:
             self._LOGGER.debug(f'unregistered {id} to {value} ({self.typing.get(id, "unknown")})')
-            return False
+            return ChangeResponse.NO
 
 
 class Building(Registry):
@@ -160,7 +168,8 @@ class Building(Registry):
         self.serial: str = structureFile['msInfo']['serialNr']
         self.lastModified: datetime = datetime.datetime.fromisoformat(structureFile['lastModified'])
         self.rooms: list[Room] = [Room(room, structureFile, self) for _, room in structureFile['rooms'].items()]
-        self.populated = False
+        self.change = ChangeResponse.NO
+        self.lastPersisted = 0
 
 
 class Room:
@@ -185,11 +194,11 @@ class Room:
             sc for sc in controls if sc.get('type') == 'Jalousie'
         ]
 
-        self.temperature: Entity = MeanAggregate([RoundedValue(hc['states']['tempActual'], registry, 0.5, False) for hc in heatingControls])
-        self.temperatureTarget: Entity = MeanAggregate([RoundedValue(hc['states']['tempTarget'], registry, 0.5) for hc in heatingControls])
-        self.humidity: Entity = MeanAggregate([RoundedValue(hc['states']['humidityActual'], registry, 0.5, False) for hc in heatingControls])
-        self.light: Entity = OrAggregate([BoolValue(sc['states']['active'], registry) for sc in switchControls])
-        self.shading: Entity = MeanAggregate([RoundedValue(sc['states']['position'], registry, 1) for sc in shadesControls])
+        self.temperature: Entity = MeanAggregate([RoundedValue(hc['states']['tempActual'], registry, ChangeResponse.LATER, 0.5) for hc in heatingControls])
+        self.temperatureTarget: Entity = MeanAggregate([RoundedValue(hc['states']['tempTarget'], registry, ChangeResponse.LATER, 0.5) for hc in heatingControls])
+        self.humidity: Entity = MeanAggregate([RoundedValue(hc['states']['humidityActual'], registry, ChangeResponse.LATER, 0.5) for hc in heatingControls])
+        self.light: Entity = OrAggregate([BoolValue(sc['states']['active'], registry, ChangeResponse.IMMEDIATE) for sc in switchControls])
+        self.shading: Entity = MeanAggregate([RoundedValue(sc['states']['position'], registry, ChangeResponse.LATER, 1) for sc in shadesControls])
         self.valve: Entity = MeanAggregate([])
-        self.ventilation: Entity = OrAggregate([BoolValue(hc['states']['openWindow'], registry) for hc in heatingControls])
-        self.precence: Entity = OrAggregate([BoolValue(pc['states']['active'], registry) for pc in precenceControls])
+        self.ventilation: Entity = OrAggregate([BoolValue(hc['states']['openWindow'], registry, ChangeResponse.LATER) for hc in heatingControls])
+        self.precence: Entity = OrAggregate([BoolValue(pc['states']['active'], registry, ChangeResponse.IMMEDIATE) for pc in precenceControls])

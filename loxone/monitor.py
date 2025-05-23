@@ -4,7 +4,6 @@
 import argparse
 import asyncio
 import asyncpg
-import croniter
 import datetime
 import json
 import secrets
@@ -13,7 +12,7 @@ import ssl
 import websockets
 
 from loxone.loxone_server import LoxoneServer
-from loxone.model import Building
+from loxone.model import Building, ChangeResponse
 
 # Create a global logger
 LOGGER = logging.getLogger('loxone.monitor')
@@ -31,7 +30,7 @@ async def keepalive(websocket: websockets.ClientConnection, sleep: int) -> None:
         LOGGER.debug('keepalive sent')
 
 
-async def process_updates(websocket: websockets.ClientConnection, building: Building) -> None:
+async def process_updates(websocket: websockets.ClientConnection, building: Building, uri: str) -> None:
     while True:
         header = await LoxoneServer.MessageHeader.parse(websocket)
         if header.identifier == LoxoneServer.MessageHeader.Identifier.KEEPALIVE:
@@ -46,8 +45,12 @@ async def process_updates(websocket: websockets.ClientConnection, building: Buil
             states = await LoxoneServer.MessageBody.parseValueStates(websocket)
             async with DATALOCK:
                 for id, value in states.items():
-                    building.update(id, value)
-                building.populated = True
+                    current = building.update(id, value)
+                    if current.value > building.change.value:
+                        building.change = current
+
+            if (building.change.value > ChangeResponse.LATER.value):
+                await persist_data(building, uri)
             continue
 
         # unsupported message
@@ -55,43 +58,54 @@ async def process_updates(websocket: websockets.ClientConnection, building: Buil
         LOGGER.debug(f'unsupported message of type {header.identifier}: SKIPPING')
 
 
-async def persist(building: Building, uri: str, persist_interval: str) -> None:
+async def scheduled_persist(building: Building, uri: str) -> None:
     while True:
-        now = datetime.datetime.now()
-        cron = croniter.croniter(persist_interval, now)
-        sleep = (cron.get_next(datetime.datetime) - now).total_seconds()
-        LOGGER.debug(f'sleeping for {sleep} seconds until next persistence')
-        await asyncio.sleep(sleep)
-        async with DATALOCK:
-            if not building.populated:
-                LOGGER.info('building not yet populated')
-                continue
-            async with await asyncpg.connect(uri) as connection:
-                async with connection.transaction():
-                    now = now.replace(second=0, microsecond=0)
-                    LOGGER.info(f'persisting data @ {now}')
-                    for room in building.rooms:
-                        await connection.execute(
-                            '''
-                            INSERT INTO room (time, id, name, temperature, temperature_target, humidity, light, shading, valve, ventilation, precence)
-                            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
-                            ON CONFLICT (time, id) DO NOTHING
-                            ''',
-                            now,
-                            room.id,
-                            room.name,
-                            room.temperature.getValue(),
-                            room.temperatureTarget.getValue(),
-                            room.humidity.getValue(),
-                            room.light.getValue(),
-                            room.shading.getValue(),
-                            room.valve.getValue(),
-                            room.ventilation.getValue(),
-                            room.precence.getValue()
-                        )
+        await asyncio.sleep(30)
+        await persist_data(building, uri)
 
 
-async def listen(server: str, user: str, password, db_uri: str, persist_interval: str) -> None:
+async def persist_data(building: Building, uri: str) -> None:
+    now = datetime.datetime.now().replace(microsecond=0)
+    unix = int(now.timestamp())
+    async with DATALOCK:
+        if building.change == ChangeResponse.NO:
+            LOGGER.debug('no pending changes => skipping persistence')
+            return
+        if (building.change != ChangeResponse.IMMEDIATE) and (unix - building.lastPersisted) < 30:
+            LOGGER.debug('last persisted data is less than 30 seconds old => skipping persistence')
+            return
+        if uri == 'none':
+            LOGGER.warning('no database uri provided => skipping persistence')
+            building.lastPersisted = unix
+            building.change = ChangeResponse.NO
+            return
+        async with await asyncpg.connect(uri) as connection:
+            async with connection.transaction():
+                LOGGER.info(f'persisting data @ {now}')
+                for room in building.rooms:
+                    await connection.execute(
+                        '''
+                        INSERT INTO room (time, id, name, temperature, temperature_target, humidity, light, shading, valve, ventilation, precence)
+                        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+                        ON CONFLICT (time, id) DO NOTHING
+                        ''',
+                        now,
+                        room.id,
+                        room.name,
+                        room.temperature.getValue(),
+                        room.temperatureTarget.getValue(),
+                        room.humidity.getValue(),
+                        room.light.getValue(),
+                        room.shading.getValue(),
+                        room.valve.getValue(),
+                        room.ventilation.getValue(),
+                        room.precence.getValue()
+                    )
+        building.lastPersisted = unix
+        building.change = ChangeResponse.NO
+
+
+async def listen(server: str, user: str, password, db_uri: str) -> None:
     # Step 1
     info = LoxoneServer.RestClient.get_info(server)
 
@@ -102,11 +116,13 @@ async def listen(server: str, user: str, password, db_uri: str, persist_interval
         # Step 3
         websocket_url = f'{info.ws_base_url}/ws/rfc6455'
         LOGGER.debug(f'connecting to {websocket_url}')
+
         ssl_context = ssl.create_default_context()
         if not info.ws_base_url.endswith('dyndns.loxonecloud.com'):
             LOGGER.warning('disabling SSL certificate verification, because server is conected locally')
             ssl_context.check_hostname = False
             ssl_context.verify_mode = ssl.CERT_NONE
+
         async with websockets.connect(websocket_url, ssl=ssl_context) as websocket:
             # Step 4
             aes_key = secrets.token_hex(AES_KEY_LENGTH)
@@ -188,9 +204,9 @@ async def listen(server: str, user: str, password, db_uri: str, persist_interval
             LOGGER.info('starting keepalive task')
             keepalive_task = asyncio.create_task(keepalive(websocket, 60))
             LOGGER.info('starting updates monitoring task')
-            process_updates_task = asyncio.create_task(process_updates(websocket, building))
+            process_updates_task = asyncio.create_task(process_updates(websocket, building, db_uri))
             LOGGER.info('starting data persistence task')
-            persist_task = asyncio.create_task(persist(building, db_uri, persist_interval))
+            persist_task = asyncio.create_task(scheduled_persist(building, db_uri))
 
             # wait for either task to complete
             done, pending = await asyncio.wait(
@@ -217,7 +233,7 @@ async def listen(server: str, user: str, password, db_uri: str, persist_interval
 async def process(arguments) -> None:
     while True:
         LOGGER.info(f'connecting to Loxone... {arguments.server}')
-        await listen(arguments.server, arguments.user, arguments.password, arguments.db_uri, arguments.perist_interval)
+        await listen(arguments.server, arguments.user, arguments.password, arguments.db_uri)
         LOGGER.info('connection closed, retrying in 20 seconds...')
         await asyncio.sleep(20)
 
@@ -228,7 +244,6 @@ def main() -> None:
     parser.add_argument('--user', type=str, help='Username to authenticate with', required=True)
     parser.add_argument('--password', type=str, help='Password to authenticate with', required=True)
     parser.add_argument('--db-uri', type=str, help='PostgreSQL connection URI postgresql://user:password@hostname/database', required=True)
-    parser.add_argument('--perist-interval', type=str, help='Cron expression for data persistence', default='*/10 * * * *')
     parser.add_argument('--log-level', default='INFO', choices=['DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL'], help='Set the logging level')
     arguments = parser.parse_args()
 
@@ -241,6 +256,6 @@ def main() -> None:
 if __name__ == '__main__':
     # Configure the logger
     logging.basicConfig(level=logging.WARNING,
-                        format='%(asctime)s - %(name)-26s - %(levelname)-8s - %(message)s',
+                        format='%(asctime)s - %(name)-26s - %(levelname)-7s - %(message)s',
                         handlers=[logging.StreamHandler()])
     main()
