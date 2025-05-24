@@ -13,6 +13,5 @@ exec poetry run "${THIS_DIR}/loxone/monitor.py"                                 
     --user="${LOXONE_USER}"                                                                  \
     --password="${LOXONE_PASSWORD}"                                                          \
     --db-uri="postgres://${DATABASE_USER}:${DATABASE_PASSOWRD}@${DATABASE_HOST}/${DATABASE}" \
-    --persist-interval="${PERSIST_INTERVAL:*/10 * * * *}"                                    \
     --log-level="${LOG_LEVEL:INFO}"
 
