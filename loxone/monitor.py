@@ -21,6 +21,7 @@ AES_KEY_LENGTH = 32
 AES_IV_LENGTH = 16
 
 DATALOCK = asyncio.Lock()
+MAX_AGGREGATION_SECONDS = 30
 
 
 async def keepalive(websocket: websockets.ClientConnection, sleep: int) -> None:
@@ -60,7 +61,7 @@ async def process_updates(websocket: websockets.ClientConnection, building: Buil
 
 async def scheduled_persist(building: Building, uri: str) -> None:
     while True:
-        await asyncio.sleep(30)
+        await asyncio.sleep(MAX_AGGREGATION_SECONDS)
         await persist_data(building, uri)
 
 
@@ -71,8 +72,8 @@ async def persist_data(building: Building, uri: str) -> None:
         if building.change == ChangeResponse.NO:
             LOGGER.debug('no pending changes => skipping persistence')
             return
-        if (building.change != ChangeResponse.IMMEDIATE) and (unix - building.lastPersisted) < 30:
-            LOGGER.debug('last persisted data is less than 30 seconds old => skipping persistence')
+        if (building.change != ChangeResponse.IMMEDIATE) and (unix - building.lastPersisted) < MAX_AGGREGATION_SECONDS:
+            LOGGER.debug(f'last persisted data is less than {MAX_AGGREGATION_SECONDS} seconds old => skipping persistence')
             return
         if uri == 'none':
             LOGGER.warning('no database uri provided => skipping persistence')
