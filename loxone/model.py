@@ -1,9 +1,9 @@
 import abc
 import datetime
+import enum
 import statistics
 import logging
 import uuid
-from enum import Enum, auto
 
 
 class Entity(abc.ABC):
@@ -12,7 +12,7 @@ class Entity(abc.ABC):
         pass
 
 
-class ChangeResponse(Enum):
+class ChangeResponse(enum.Enum):
     IMMEDIATE = 2
     LATER = 1
     NO = 0
