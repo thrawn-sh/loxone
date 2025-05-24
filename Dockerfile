@@ -1,27 +1,30 @@
-FROM python:slim
+# build application
+FROM python as builder
 
-# keep python from generating .pyc files in the container
-ENV PYTHONDONTWRITEBYTECODE 1
-# turn off buffering for easier container logging
-ENV PYTHONUNBUFFERED 1
+RUN pip install poetry==1.8.2
 
-# install poetry
-ENV DEBIAN_FRONTEND=noninteractive
-RUN apt-get update                                                            \
- && apt-get install --yes --no-install-recommends curl cron postgresql-client \
- && curl -sSL https://install.python-poetry.org/ | python3 -                  \
- && apt-get purge --yes curl                                                  \
- && apt-get autoremove --yes                                                  \
- && apt-get clean                                                             \
- && rm --force --recursive /var/lib/apt/lists/*
+ENV POETRY_CACHE_DIR=/tmp/poetry_cache \
+    POETRY_NO_INTERACTION=1            \
+    POETRY_VIRTUALENVS_CREATE=1        \
+    POETRY_VIRTUALENVS_IN_PROJECT=1
 
-ENV PATH="${PATH}:/root/.local/bin"
+WORKDIR /app
 
-# copying source
-WORKDIR /usr/src/app
-COPY . .
+COPY pyproject.toml poetry.lock ./
 
-RUN poetry config virtualenvs.create false                  \
- && poetry install --no-interaction --no-ansi --without dev
+RUN touch README.md
 
-ENTRYPOINT [ "/usr/src/app/entrypoint.sh" ]
+RUN poetry install --without dev --no-root
+
+# runtime
+FROM python:slim as runtime
+
+ENV VIRTUAL_ENV=/app/.venv      \
+    PATH="/app/.venv/bin:$PATH"
+
+COPY --from=builder ${VIRTUAL_ENV} ${VIRTUAL_ENV}
+
+COPY entrypoint.sh ./
+COPY loxone ./loxone
+
+ENTRYPOINT [ "/entrypoint.sh" ]

@@ -8,7 +8,7 @@ THIS_PATH="$(readlink --canonicalize-existing "${0}")"
 THIS_NAME="$(basename "${THIS_PATH}")"
 THIS_DIR="$(dirname "${THIS_PATH}")"
 
-exec poetry run "${THIS_DIR}/loxone/monitor.py"                                              \
+exec python -m loxone.monitor                                                                \
     --server="${LOXONE_SERVER}"                                                              \
     --user="${LOXONE_USER}"                                                                  \
     --password="${LOXONE_PASSWORD}"                                                          \
