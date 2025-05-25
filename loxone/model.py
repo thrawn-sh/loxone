@@ -194,11 +194,21 @@ class Room:
             sc for sc in controls if sc.get('type') == 'Jalousie'
         ]
 
+        valveCategory = None
+        for _, category in structureFile['cats'].items():
+            if category.get('name') == 'Stellantrieb':  # TODO "Valve" in German
+                valveCategory = category['uuid']
+                break
+
+        valveControls = [
+            vc for vc in controls if vc.get('cat') == valveCategory
+        ]
+
         self.temperature: Entity = MeanAggregate([RoundedValue(hc['states']['tempActual'], registry, ChangeResponse.LATER, 0.5) for hc in heatingControls])
         self.temperatureTarget: Entity = MeanAggregate([RoundedValue(hc['states']['tempTarget'], registry, ChangeResponse.LATER, 0.5) for hc in heatingControls])
         self.humidity: Entity = MeanAggregate([RoundedValue(hc['states']['humidityActual'], registry, ChangeResponse.LATER, 0.5) for hc in heatingControls])
         self.light: Entity = OrAggregate([BoolValue(sc['states']['active'], registry, ChangeResponse.IMMEDIATE) for sc in switchControls])
         self.shading: Entity = MeanAggregate([RoundedValue(sc['states']['position'], registry, ChangeResponse.LATER, 1) for sc in shadesControls])
-        self.valve: Entity = MeanAggregate([])
+        self.valve: Entity = MeanAggregate([RoundedValue(vc['states']['value'], registry, ChangeResponse.LATER, 1) for vc in valveControls])
         self.ventilation: Entity = OrAggregate([BoolValue(hc['states']['openWindow'], registry, ChangeResponse.LATER) for hc in heatingControls])
         self.precence: Entity = OrAggregate([BoolValue(pc['states']['active'], registry, ChangeResponse.IMMEDIATE) for pc in precenceControls])
