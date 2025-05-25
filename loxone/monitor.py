@@ -98,15 +98,8 @@ async def persist_data(building: Building, uri: str) -> None:
             async with connection.transaction():
                 LOGGER.info(f'persisting data @ {now}')
                 for room in building.rooms:
-                    await connection.execute(
-                        '''
-                        INSERT INTO room (time, id, name, temperature, temperature_target, humidity, light, shading, valve, ventilation, precence)
-                        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
-                        ON CONFLICT (time, id) DO NOTHING
-                        ''',
-                        now,
-                        room.id,
-                        room.name,
+                    # only persist if at least one value is defined to the room
+                    values = [
                         room.temperature.getValue(),
                         room.temperatureTarget.getValue(),
                         room.humidity.getValue(),
@@ -115,7 +108,19 @@ async def persist_data(building: Building, uri: str) -> None:
                         room.valve.getValue(),
                         room.ventilation.getValue(),
                         room.precence.getValue()
-                    )
+                    ]
+                    if any(v is not None for v in values):
+                        await connection.execute(
+                            '''
+                            INSERT INTO room (time, id, name, temperature, temperature_target, humidity, light, shading, valve, ventilation, precence)
+                            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+                            ON CONFLICT (time, id) DO NOTHING
+                            ''',
+                            now,
+                            room.id,
+                            room.name,
+                            *values
+                        )
         building.lastPersisted = unix
         building.change = ChangeResponse.NO
 
