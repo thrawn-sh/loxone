@@ -79,6 +79,20 @@ async def persist_data(building: Building, uri: str) -> None:
             LOGGER.warning('no database uri provided => skipping persistence')
             building.lastPersisted = unix
             building.change = ChangeResponse.NO
+            for room in building.rooms:
+                values = [
+                        room.temperature.getValue(),
+                        room.temperatureTarget.getValue(),
+                        room.humidity.getValue(),
+                        room.light.getValue(),
+                        room.shading.getValue(),
+                        room.valve.getValue(),
+                        room.ventilation.getValue(),
+                        room.precence.getValue()
+                    ]
+                if any(v is not None for v in values):
+                    LOGGER.info(f'{room.name:>20}: ' + ', '.join(f'{str(v):>5}' if v is not None else ' None' for v in values))
+
             return
         async with await asyncpg.connect(uri) as connection:
             async with connection.transaction():
