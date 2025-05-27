@@ -3,7 +3,6 @@ import datetime
 import enum
 import statistics
 import logging
-import uuid
 
 
 class Entity(abc.ABC):
@@ -174,7 +173,7 @@ class Building(Registry):
 
 class Room:
     def __init__(self, room: object, structureFile: object, registry: Registry) -> None:
-        self.id: uuid.UUID = uuid.UUID(room['uuid'])
+        self.id: str = room['uuid']
         self.name: str = room['name']
 
         controls = [control for _, control in structureFile['controls'].items() if control.get('room') == room['uuid']]
