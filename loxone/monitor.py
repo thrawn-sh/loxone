@@ -94,7 +94,9 @@ async def persist_data(building: Building, uri: str) -> None:
                     LOGGER.info(f'{room.name:>20}: ' + ', '.join(f'{str(v):>5}' if v is not None else ' None' for v in values))
 
             return
-        async with await asyncpg.connect(uri) as connection:
+
+        connection = await asyncpg.connect(uri)
+        try:
             async with connection.transaction():
                 LOGGER.info(f'persisting data @ {now}')
                 for room in building.rooms:
@@ -121,6 +123,8 @@ async def persist_data(building: Building, uri: str) -> None:
                             room.name,
                             *values
                         )
+        finally:
+            await connection.close()
         building.lastPersisted = unix
         building.change = ChangeResponse.NO
 
