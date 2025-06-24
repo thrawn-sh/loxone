@@ -4,10 +4,14 @@
 import argparse
 import ftplib
 import io
+import logging
 import struct
 import sys
 import zipfile
 import zlib
+
+# Create a global logger
+LOGGER = logging.getLogger('loxone.configuration')
 
 
 def download_latest_config(server: str, user: str, password: str) -> io.BytesIO:
@@ -52,7 +56,7 @@ def uncompress(download: io.BytesIO) -> io.BytesIO:
 def decode(file: io.BytesIO) -> bytearray:
     header = struct.unpack('<L', file.read(4))[0]
     if header != 0xaabbccee:  # magic word to detect a compressed file
-        print('wrong header', file=sys.stderr)
+        LOGGER.error('wrong header')
         return None
 
     compressedSize, uncompressedSize, checksum = struct.unpack('<LLL', file.read(12))
@@ -105,11 +109,11 @@ def decode(file: io.BytesIO) -> bytearray:
                 result += result[-bytesBack:-bytesBack + 1]
             bytesBackCopied -= 1
     if checksum != zlib.crc32(result):
-        print('Invalid checksum', file=sys.stderr)
+        LOGGER.error('Invalid checksum')
         return None
 
     if len(result) != uncompressedSize:
-        print(f'Uncompressed filesize is wrong {len(result)} != {uncompressedSize}', file=sys.stderr)
+        LOGGER.error(f'Uncompressed filesize is wrong {len(result)} != {uncompressedSize}')
         return None
 
     return result
@@ -120,6 +124,7 @@ def main() -> None:
     parser.add_argument('--server', default='http://miniserver', type=str, help='Loxone miniserver url')
     parser.add_argument('--user', default='loxone', type=str, help='Username to authenticate with')
     parser.add_argument('--password', default='enoxol2009', type=str, help='Password to authenticate with')
+    parser.add_argument('--log-level', default='INFO', choices=['DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL'], help='Set the logging level')
     parser.add_argument('--output', default='Project.Loxone', type=str, help='Output file to save configuration to ("-" for stdout)')
 
     arguments = parser.parse_args()
@@ -135,4 +140,8 @@ def main() -> None:
 
 
 if __name__ == '__main__':
+    # Configure the logger
+    logging.basicConfig(level=logging.WARNING,
+                        format='%(asctime)s - %(name)-26s - %(levelname)-7s - %(message)s',
+                        handlers=[logging.StreamHandler()])
     main()

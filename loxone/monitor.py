@@ -8,11 +8,13 @@ import datetime
 import json
 import secrets
 import logging
+import pathlib
 import ssl
 import websockets
 
 from loxone.loxone_server import LoxoneServer
 from loxone.model import Building, ChangeResponse
+from loxone.configuration import decode, download_latest_config
 
 # Create a global logger
 LOGGER = logging.getLogger('loxone.monitor')
@@ -129,7 +131,7 @@ async def persist_data(building: Building, uri: str) -> None:
         building.change = ChangeResponse.NO
 
 
-async def listen(server: str, user: str, password, db_uri: str) -> None:
+async def listen(server: str, user: str, password, db_uri: str, folder: pathlib.Path) -> None:
     # Step 1
     info = LoxoneServer.RestClient.get_info(server)
 
@@ -210,6 +212,16 @@ async def listen(server: str, user: str, password, db_uri: str) -> None:
                     json.dump(message, f, indent=2, ensure_ascii=False)
             building = Building(message)
 
+            LOGGER.info('pulling latest configuration from Loxone...')
+            raw = download_latest_config(server, user, password)
+            xml = decode(raw)
+            if xml:
+                file = folder / f'{building.name}_{building.lastModified.strftime("%Y-%m-%dT%H-%M-%S")}.loxone'
+                with open(file, 'wb') as output:
+                    output.write(xml)
+            else:
+                LOGGER.warning('no configuration file found in Loxone, skipping backup')
+
             # get current values
             LOGGER.info('requesting status update')
             await LoxoneServer.MessageBody.sendMessage(websocket, 'jdev/sps/enablebinstatusupdate')
@@ -255,9 +267,10 @@ async def listen(server: str, user: str, password, db_uri: str) -> None:
 
 
 async def process(arguments) -> None:
+    arguments.backup_folder.mkdir(parents=True, exist_ok=True)
     while True:
         LOGGER.info(f'connecting to Loxone... {arguments.server}')
-        await listen(arguments.server, arguments.user, arguments.password, arguments.db_uri)
+        await listen(arguments.server, arguments.user, arguments.password, arguments.db_uri, arguments.backup_folder)
         LOGGER.info('connection closed, retrying in 20 seconds...')
         await asyncio.sleep(20)
 
@@ -269,6 +282,7 @@ def main() -> None:
     parser.add_argument('--password', type=str, help='Password to authenticate with', required=True)
     parser.add_argument('--db-uri', type=str, help='PostgreSQL connection URI postgresql://user:password@hostname/database', required=True)
     parser.add_argument('--log-level', default='INFO', choices=['DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL'], help='Set the logging level')
+    parser.add_argument('--backup-folder', type=pathlib.Path, help='Path to the backup folder', required=True)
     arguments = parser.parse_args()
 
     log_level = getattr(logging, arguments.log_level.upper())

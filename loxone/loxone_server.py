@@ -184,6 +184,7 @@ class LoxoneServer:
             value: str = response['LL']['value']
             value = value.replace("'", '"')  # make json loadable
             value = json.loads(value)
+            print(f'raw value: {value}')
             return LoxoneServer.RestClient.MiniserverInfo(value, hostname)
 
         @staticmethod
