@@ -13,5 +13,6 @@ exec python -m loxone.monitor                                                   
     --user="${LOXONE_USER}"                                                                  \
     --password="${LOXONE_PASSWORD}"                                                          \
     --db-uri="postgres://${DATABASE_USER}:${DATABASE_PASSWORD}@${DATABASE_HOST}/${DATABASE}" \
+    --backup-folder="${BACKUP_FOLDER:-/backup}"                                              \
     --log-level="${LOG_LEVEL:-INFO}"
 
