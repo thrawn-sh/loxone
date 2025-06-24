@@ -212,15 +212,16 @@ async def listen(server: str, user: str, password, db_uri: str, folder: pathlib.
                     json.dump(message, f, indent=2, ensure_ascii=False)
             building = Building(message)
 
-            LOGGER.info('pulling latest configuration from Loxone...')
-            raw = download_latest_config(server, user, password)
-            xml = decode(raw)
-            if xml:
-                file = folder / f'{building.name}_{building.lastModified.strftime("%Y-%m-%dT%H-%M-%S")}.loxone'
-                with open(file, 'wb') as output:
-                    output.write(xml)
-            else:
-                LOGGER.warning('no configuration file found in Loxone, skipping backup')
+            file = folder / f'{building.name}_{building.lastModified.strftime("%Y-%m-%dT%H-%M-%S")}.loxone'
+            if not file.exists():
+                LOGGER.info('pulling latest configuration from Loxone...')
+                raw = download_latest_config(server, user, password)
+                xml = decode(raw)
+                if xml:
+                    with open(file, 'wb') as output:
+                        output.write(xml)
+                else:
+                    LOGGER.warning('no configuration file found in Loxone, skipping backup')
 
             # get current values
             LOGGER.info('requesting status update')
