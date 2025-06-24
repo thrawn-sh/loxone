@@ -43,7 +43,7 @@ $> cat loxone.sql | psql --host=<HOST> --dbname=<DATABASE> <USER>
 ## Build docker container
 ```sh
 # ensure everything is commited
-$> docker build --tag shadowhunt/loxone:latest --tag shadowhunt/loxone:$(git log -1 --format="%at") .
+$> docker build --pull --tag shadowhunt/loxone:latest --tag shadowhunt/loxone:$(git log -1 --format="%at") .
 $> docker push shadowhunt/loxone:$(git log -1 --format="%at")
 $> docker push shadowhunt/loxone:latest
 ```
