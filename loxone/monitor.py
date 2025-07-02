@@ -191,8 +191,7 @@ async def listen(server: str, user: str, password, db_uri: str, folder: pathlib.
             if message['LL']['code'] != '200':
                 raise AssertionError(f'unexpected code: {message}')
 
-            # TODO maybe use APP permission for longer token lifetime
-            token_command = f'salt/{salt}/jdev/sys/getjwt/{user_hash}/{user}/{LoxoneServer.Permission.WEB.value}/{LoxoneServer.CLIENT_ID}/{LoxoneServer.CLIENT_NAME}'
+            token_command = f'salt/{salt}/jdev/sys/getjwt/{user_hash}/{user}/{LoxoneServer.Permission.APP.value}/{LoxoneServer.CLIENT_ID}/{LoxoneServer.CLIENT_NAME}'
             encrypted_command = LoxoneServer.AuthenticationUtil.encrypt_command(aes_key, aes_iv, token_command)
             await LoxoneServer.MessageBody.sendMessage(websocket, f'jdev/sys/enc/{encrypted_command}')
             header = await LoxoneServer.MessageHeader.parse(websocket)
